@@ -64,133 +64,133 @@ struct hdr_s {
 #define ASSOC_FSM 1
 #define WPA_STATE_MACHINE 23
 
-SEC("kprobe/StateMachinePerformAction")
-int trace_StateMachinePerformAction(struct pt_regs *ctx)
-{
+// SEC("kprobe/StateMachinePerformAction")
+// int trace_StateMachinePerformAction(struct pt_regs *ctx)
+// {
 
-    // char comm[16];
-    // u32 pid = (u32)(bpf_get_current_pid_tgid() >> 32);
-    // bpf_get_current_comm(comm, sizeof(comm));
+//     // char comm[16];
+//     // u32 pid = (u32)(bpf_get_current_pid_tgid() >> 32);
+//     // bpf_get_current_comm(comm, sizeof(comm));
 
-    // bpf_printk("pid: %u, comm: %s\n", pid, comm);
+//     // bpf_printk("pid: %u, comm: %s\n", pid, comm);
 
-    struct elem_s *elem = (struct elem_s *)PT_REGS_PARM3(ctx);
-    unsigned long Machine;
-    bpf_probe_read_kernel(&Machine, sizeof(Machine), ((char *)elem) + 2304);
-    if (AUTH_FSM == Machine)
-    {
-        struct hdr_s hdr;
-        bpf_probe_read_kernel(&hdr, sizeof(hdr), ((char *)elem) + 0);
-        bpf_printk("[Machine] %lu - auth from %02x:%02x:%02x:%02x:%02x:%02x\n", Machine, 
-            hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    }
-    else if (ASSOC_FSM == Machine)
-    {
-        struct hdr_s hdr;
-        bpf_probe_read_kernel(&hdr, sizeof(hdr), ((char *)elem) + 0);
-        bpf_printk("[Machine] %lu - assoc from %02x:%02x:%02x:%02x:%02x:%02x\n", Machine, 
-            hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    }
-    else if (WPA_STATE_MACHINE == Machine)
-    {
-        struct hdr_s hdr;
-        bpf_probe_read_kernel(&hdr, sizeof(hdr), ((char *)elem) + 0);
-        bpf_printk("[Machine] %lu - wpa from %02x:%02x:%02x:%02x:%02x:%02x\n", Machine, 
-            hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    }
-    return 0;
-}
+//     struct elem_s *elem = (struct elem_s *)PT_REGS_PARM3(ctx);
+//     unsigned long Machine;
+//     bpf_probe_read_kernel(&Machine, sizeof(Machine), ((char *)elem) + 2304);
+//     if (AUTH_FSM == Machine)
+//     {
+//         struct hdr_s hdr;
+//         bpf_probe_read_kernel(&hdr, sizeof(hdr), ((char *)elem) + 0);
+//         bpf_printk("[Machine] %lu - auth from %02x:%02x:%02x:%02x:%02x:%02x\n", Machine, 
+//             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+//     }
+//     else if (ASSOC_FSM == Machine)
+//     {
+//         struct hdr_s hdr;
+//         bpf_probe_read_kernel(&hdr, sizeof(hdr), ((char *)elem) + 0);
+//         bpf_printk("[Machine] %lu - assoc from %02x:%02x:%02x:%02x:%02x:%02x\n", Machine, 
+//             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+//     }
+//     else if (WPA_STATE_MACHINE == Machine)
+//     {
+//         struct hdr_s hdr;
+//         bpf_probe_read_kernel(&hdr, sizeof(hdr), ((char *)elem) + 0);
+//         bpf_printk("[Machine] %lu - wpa from %02x:%02x:%02x:%02x:%02x:%02x\n", Machine, 
+//             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+//     }
+//     return 0;
+// }
 
-// MacTableInsertEntry
-SEC("kprobe/MacTableInsertEntry")
-int trace_MacTableInsertEntry(struct pt_regs *ctx)
-{
-    unsigned char *addr = (unsigned char *)PT_REGS_PARM2(ctx);
-    unsigned char src[6];
-    bpf_probe_read_kernel(src, sizeof(src), addr);
-    bpf_printk("[insert entry] %02x:%02x:%02x:%02x:%02x:%02x\n", 
-            src[0], src[1], src[2], src[3], src[4], src[5]);
-    return 0;
-}
+// // MacTableInsertEntry
+// SEC("kprobe/MacTableInsertEntry")
+// int trace_MacTableInsertEntry(struct pt_regs *ctx)
+// {
+//     unsigned char *addr = (unsigned char *)PT_REGS_PARM2(ctx);
+//     unsigned char src[6];
+//     bpf_probe_read_kernel(src, sizeof(src), addr);
+//     bpf_printk("[insert entry] %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//             src[0], src[1], src[2], src[3], src[4], src[5]);
+//     return 0;
+// }
 
-// MacTableDeleteEntry
-SEC("kprobe/MacTableDeleteEntry")
-int trace_MacTableDeleteEntry(struct pt_regs *ctx)
-{
-    unsigned char *addr = (unsigned char *)PT_REGS_PARM3(ctx);
-    unsigned char src[6];
-    bpf_probe_read_kernel(src, sizeof(src), addr);
-    bpf_printk("[delete entry] %02x:%02x:%02x:%02x:%02x:%02x\n", 
-            src[0], src[1], src[2], src[3], src[4], src[5]);
-    return 0;
-}
+// // MacTableDeleteEntry
+// SEC("kprobe/MacTableDeleteEntry")
+// int trace_MacTableDeleteEntry(struct pt_regs *ctx)
+// {
+//     unsigned char *addr = (unsigned char *)PT_REGS_PARM3(ctx);
+//     unsigned char src[6];
+//     bpf_probe_read_kernel(src, sizeof(src), addr);
+//     bpf_printk("[delete entry] %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//             src[0], src[1], src[2], src[3], src[4], src[5]);
+//     return 0;
+// }
 
-// PeerPairMsg2Action
-SEC("kprobe/PeerPairMsg2Action")
-int trace_PeerPairMsg2Action(struct pt_regs *ctx)
-{
-    struct elem_s *elem = (struct elem_s *)PT_REGS_PARM2(ctx);
-    struct hdr_s hdr;
-    bpf_probe_read_kernel(&hdr, sizeof(hdr), elem->Msg);
-    bpf_printk("[EAPOL ACTION] eapol 2 from %02x:%02x:%02x:%02x:%02x:%02x\n", 
-            hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    return 0;
-}
+// // PeerPairMsg2Action
+// SEC("kprobe/PeerPairMsg2Action")
+// int trace_PeerPairMsg2Action(struct pt_regs *ctx)
+// {
+//     struct elem_s *elem = (struct elem_s *)PT_REGS_PARM2(ctx);
+//     struct hdr_s hdr;
+//     bpf_probe_read_kernel(&hdr, sizeof(hdr), elem->Msg);
+//     bpf_printk("[EAPOL ACTION] eapol 2 from %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+//     return 0;
+// }
 
-// PeerPairMsg4Action
-SEC("kprobe/PeerPairMsg4Action")
-int trace_PeerPairMsg4Action(struct pt_regs *ctx)
-{
-    struct elem_s *elem = (struct elem_s *)PT_REGS_PARM2(ctx);
-    struct hdr_s hdr;
-    bpf_probe_read_kernel(&hdr, sizeof(hdr), elem->Msg);
-    bpf_printk("[EAPOL ACTION] eapol 4 from %02x:%02x:%02x:%02x:%02x:%02x\n", 
-            hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    return 0;
-}
+// // PeerPairMsg4Action
+// SEC("kprobe/PeerPairMsg4Action")
+// int trace_PeerPairMsg4Action(struct pt_regs *ctx)
+// {
+//     struct elem_s *elem = (struct elem_s *)PT_REGS_PARM2(ctx);
+//     struct hdr_s hdr;
+//     bpf_probe_read_kernel(&hdr, sizeof(hdr), elem->Msg);
+//     bpf_printk("[EAPOL ACTION] eapol 4 from %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+//     return 0;
+// }
 
-SEC("kretprobe/WpaMessageSanity")
-int BPF_KRETPROBE(WpaMessageSanity_exit, unsigned char ret) {
+// SEC("kretprobe/WpaMessageSanity")
+// int BPF_KRETPROBE(WpaMessageSanity_exit, unsigned char ret) {
     
-    // 打印返回值（0 或 1）
-    bpf_printk("WpaMessageSanity returned: %u \n", ret);
+//     // 打印返回值（0 或 1）
+//     bpf_printk("WpaMessageSanity returned: %u \n", ret);
     
-    // 可选：统计返回值分布
-    if (ret == 0) {
-        bpf_printk("Validation failed msg 2 maybe wrong password\n");
-    } else if (ret == 1) {
-        bpf_printk("Validation passed msg 2\n");
-    }
+//     // 可选：统计返回值分布
+//     if (ret == 0) {
+//         bpf_printk("Validation failed msg 2 maybe wrong password\n");
+//     } else if (ret == 1) {
+//         bpf_printk("Validation passed msg 2\n");
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
-// MlmeDeAuthAction
-SEC("kprobe/MlmeDeAuthAction")
-int trace_MlmeDeAuthAction(struct pt_regs *ctx)
-{
-    unsigned short reason = (unsigned short)PT_REGS_PARM3(ctx);
+// // MlmeDeAuthAction
+// SEC("kprobe/MlmeDeAuthAction")
+// int trace_MlmeDeAuthAction(struct pt_regs *ctx)
+// {
+//     unsigned short reason = (unsigned short)PT_REGS_PARM3(ctx);
 
-    bpf_printk("[DEAUTH ACTION] reason %u\n", reason);
-    return 0;
-}
+//     bpf_printk("[DEAUTH ACTION] reason %u\n", reason);
+//     return 0;
+// }
 
-// MgtMacHeaderInit
-SEC("kprobe/MgtMacHeaderInit")
-int trace_MgtMacHeaderInit(struct pt_regs *ctx)
-{
-    unsigned char type = (unsigned short)PT_REGS_PARM3(ctx);
-    unsigned char *addr = (unsigned char *)PT_REGS_PARM5(ctx);
+// // MgtMacHeaderInit
+// SEC("kprobe/MgtMacHeaderInit")
+// int trace_MgtMacHeaderInit(struct pt_regs *ctx)
+// {
+//     unsigned char type = (unsigned short)PT_REGS_PARM3(ctx);
+//     unsigned char *addr = (unsigned char *)PT_REGS_PARM5(ctx);
 
-    if (12 == type)
-    {
-        unsigned char tmp[6];
-        bpf_probe_read_kernel(tmp, sizeof(tmp), addr);
-        bpf_printk("[FRAME] deauth to %02x:%02x:%02x:%02x:%02x:%02x\n", 
-            tmp[0], tmp[1], tmp[2], tmp[3], tmp[4], tmp[5]);
-    }
-    return 0;
-}
+//     if (12 == type)
+//     {
+//         unsigned char tmp[6];
+//         bpf_probe_read_kernel(tmp, sizeof(tmp), addr);
+//         bpf_printk("[FRAME] deauth to %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//             tmp[0], tmp[1], tmp[2], tmp[3], tmp[4], tmp[5]);
+//     }
+//     return 0;
+// }
 
 int mac_eaqul(unsigned char *mac1, unsigned char *mac2)
 {
@@ -232,41 +232,45 @@ int filter_need_handle(struct hdr_s *hdr)
     return ret;
 }
 
-// MiniportMMRequest
-SEC("kprobe/MiniportMMRequest")
-int trace_MiniportMMRequest(struct pt_regs *ctx)
-{
-    unsigned int msglen = (unsigned int)PT_REGS_PARM4(ctx);
-    unsigned char *msg = (unsigned char *)PT_REGS_PARM3(ctx);
+// // MiniportMMRequest
+// SEC("kprobe/MiniportMMRequest")
+// int trace_MiniportMMRequest(struct pt_regs *ctx)
+// {
+//     unsigned int msglen = (unsigned int)PT_REGS_PARM4(ctx);
+//     unsigned char *msg = (unsigned char *)PT_REGS_PARM3(ctx);
 
-    if (msglen >= sizeof(struct hdr_s))
-    {
-        struct hdr_s hdr;
-        bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
-        if (filter_need_handle(&hdr)){
-            static struct event_t data;
-            bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
-                hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-            if (msglen < sizeof(data.message))
-            {
-                bpf_probe_read_kernel(data.message, msglen, msg);
-                data.msglen = msglen;
-                int send_len = offsetof(struct event_t, message) + msglen;
-                bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
-            }
-        }
-    }
+//     if (msglen >= sizeof(struct hdr_s))
+//     {
+//         struct hdr_s hdr;
+//         bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
+//         if (filter_need_handle(&hdr)){
+//             static struct event_t data;
+//             bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//                 hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+//             if (msglen < sizeof(data.message))
+//             {
+//                 bpf_probe_read_kernel(data.message, msglen, msg);
+//                 data.msglen = msglen;
+//                 int send_len = offsetof(struct event_t, message) + msglen;
+//                 bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
+//             }
+//         }
+//     }
     
-    return 0;
-}
+//     return 0;
+// }
+
+struct my_pt_regs {
+	unsigned int uregs[18];
+};
 
 // MlmeEnqueueForRecv
 SEC("kprobe/MlmeEnqueueForRecv")
-int trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
+int trace_MlmeEnqueueForRecv(struct my_pt_regs *ctx)
 {
     unsigned long msglen = (unsigned long)PT_REGS_PARM4(ctx);
     unsigned char *msg = (unsigned char *)PT_REGS_PARM5(ctx);
-
+    bpf_printk("msglen : %u\n", msglen);
     if (msglen >= sizeof(struct hdr_s))
     {
         struct hdr_s hdr;
@@ -285,6 +289,12 @@ int trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
     }
     
     return 0;
+}
+
+SEC("kprobe/dev_hard_start_xmit")
+int __trace_dev_hard_start_xmit(struct pt_regs *ctx)
+{
+    bpf_printk("called\n");
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

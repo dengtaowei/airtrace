@@ -43,6 +43,7 @@ NOSTDINC_FLAGS	+= -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 		opt -O2 -mtriple=bpf-pc-linux |                                 \
 		llvm-dis |                                                      \
 		llc -march=bpf -filetype=obj -o $@
+		cp airtrace.bpf.o ~/Desktop/nfs_share
 
 $(USER_SKEL): $(BPF_OBJ)
 	bpftool gen skeleton $< > $@
