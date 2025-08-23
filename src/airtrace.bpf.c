@@ -4,15 +4,10 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_endian.h>
 #include "airtrace.h"
+#include "dot11_type.h"
 
 // clang -E -target bpf -D__BPF_TRACING__ -D__TARGET_ARCH_x86 -Wall -g airtrace.bpf.c -o airtrace.i
 
-const char kprobe_sys_msg[16] = "sys_execve";
-const char kprobe_msg[16] = "do_execve";
-const char fentry_msg[16] = "fentry_execve";
-const char tp_msg[16] = "tp_execve";
-const char tp_btf_exec_msg[16] = "tp_btf_exec";
-const char raw_tp_exec_msg[16] = "raw_tp_exec";
 struct
 {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
@@ -34,16 +29,6 @@ typedef struct
     u16 network_header;
 } parse_ctx_t;
 
-static inline bool skb_l2_check(u16 header)
-{
-    return !header || header == (u16)~0U;
-}
-
-#define AF_INET 2         /* Internet IP Protocol 	*/
-#define AF_INET6 10       /* IP version 6			*/
-#define ETH_P_IP 0x0800   /* Internet Protocol packet	*/
-#define ETH_P_IPV6 0x86DD /* IPv6 over bluebook		*/
-#define ETH_P_ARP 0x0806  /* Address Resolution packet	*/
 
 #define MGMT_DMA_BUFFER_SIZE    1600	/*2048 */
 
@@ -52,13 +37,6 @@ struct elem_s
     unsigned char Msg[MGMT_DMA_BUFFER_SIZE];
     unsigned long Machine;
 };
-
-struct hdr_s {
-    u32 frame_control;
-    unsigned char dst[6];
-    unsigned char src[6];
-    unsigned char bssid[6];
-} __attribute__((__packed__));
 
 #define AUTH_FSM 2
 #define ASSOC_FSM 1
@@ -214,17 +192,17 @@ int mac_eaqul(unsigned char *mac1, unsigned char *mac2)
 	(pkt_args_t *)_v;					\
 })
 
-int filter_need_handle(struct hdr_s *hdr)
+int filter_need_handle(header_802_11_t *hdr)
 {
     int ret = 0;
     // unsigned char filter_mac[6] = {0xd4, 0xd7, 0xcf, 0xd1, 0x7c, 0xa9};
 
     pkt_args_t *pkt_filter = CONFIG();
-    if (mac_eaqul(hdr->src, pkt_filter->addr))
+    if (mac_eaqul(hdr->Src, pkt_filter->addr))
     {
         ret = 1;
     }
-    else if (mac_eaqul(hdr->dst, pkt_filter->addr))
+    else if (mac_eaqul(hdr->Dst, pkt_filter->addr))
     {
         ret = 1;
     }
@@ -284,14 +262,14 @@ int trace_MiniportMMRequest(struct pt_regs *ctx)
     // {
     //     bpf_printk("arg%d = %x\n", i, ctx->uregs[i]);
     // }
-    if (msglen >= sizeof(struct hdr_s))
+    if (msglen >= sizeof(header_802_11_t))
     {
-        struct hdr_s hdr;
+        header_802_11_t hdr;
         bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
         if (filter_need_handle(&hdr)){
             static struct event_t data;
             bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
-                hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+                hdr.Src[0], hdr.Src[1], hdr.Src[2], hdr.Src[3], hdr.Src[4], hdr.Src[5]);
             if (msglen < sizeof(data.message))
             {
                 bpf_probe_read_kernel(data.message, msglen, msg);
@@ -318,14 +296,14 @@ int __trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
     //     bpf_printk("arg%d = %x\n", i, ctx->uregs[i]);
     // }
     
-    if (msglen >= sizeof(struct hdr_s))
+    if (msglen >= sizeof(header_802_11_t))
     {
-        struct hdr_s hdr;
+        header_802_11_t hdr;
         bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
         if (filter_need_handle(&hdr)){
             static struct event_t data;
             bpf_printk("[FRAME] from %02x:%02x:%02x:%02x:%02x:%02x\n", 
-                hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+                hdr.Src[0], hdr.Src[1], hdr.Src[2], hdr.Src[3], hdr.Src[4], hdr.Src[5]);
             if (msglen < sizeof(data.message))
             {
                 bpf_probe_read_kernel(data.message, msglen, msg);
