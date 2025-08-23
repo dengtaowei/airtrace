@@ -96,6 +96,9 @@ void sigint_handler(int sig) {
 	 g_exit_flag = true; // 设置退出标志
 }
 
+extern LIBBPF_API int bpf_map_update_elem(int fd, const void *key, const void *value,
+				   __u64 flags);
+
 #define bpf_set_config(skel, sec, value) do {		\
 	int fd = bpf_map__fd(skel->maps.m_config);	\
 	unsigned char buf[CONFIG_MAP_SIZE] = {};			\
@@ -110,6 +113,25 @@ void sigint_handler(int sig) {
 	memcpy(buf, &value, sizeof(value));		\
 	bpf_map_update_elem(fd, &key, buf, 0);		\
 } while (0)
+
+
+// int bpf_set_config(struct airtrace_bpf *skel, bpf_args_t *value)
+// {
+// 	int ret = 0;
+// 	int fd = bpf_map__fd(skel->maps.m_config);	
+// 	unsigned char buf[CONFIG_MAP_SIZE] = {};			
+// 	int key = 0;					
+							
+// 	if (fd < 0) {					
+// 		printf("failed to get config map: %d\n",
+// 		       fd);							
+// 	}						
+							
+// 	memcpy(buf, value, sizeof(*value));
+// 	ret = bpf_map_update_elem(fd, &key, buf, 0);
+// 	return ret;
+
+// }
 
 int main(int argc, char *argv[])
 {

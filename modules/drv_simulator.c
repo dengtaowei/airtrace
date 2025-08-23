@@ -1,11 +1,11 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/timer.h>
-#include <linux/jiffies.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
 #include "rtmp_type.h"
 
-static struct timer_list my_timer;
+static struct task_struct *my_thread;
 
 static unsigned char frame[] = {
     0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x08, 0x3b, 0xe9, 0x14, 0x94, 0xf7,
@@ -55,53 +55,81 @@ struct wifi_dev {
 
 NDIS_STATUS MiniportMMRequest(RTMP_ADAPTER *pAd, UCHAR QueIdx, UCHAR *pData, UINT Length)
 {
-
+    printk(KERN_INFO "pAd=%p, QueIdx=%hhx, pData=%p, Length=%u\n", pAd, QueIdx, pData, Length);
     return NDIS_STATUS_SUCCESS;
 }
 
-BOOLEAN MlmeEnqueueForRecv(
-	IN RTMP_ADAPTER *pAd,
-	IN ULONG Wcid,
-	IN struct raw_rssi_info *rssi_info,
-	IN ULONG MsgLen,
-	IN VOID *Msg,
-	IN UCHAR OpMode,
-	IN struct wifi_dev *wdev,
-	IN UCHAR RxPhyMode
+unsigned char MlmeEnqueueForRecv(
+	RTMP_ADAPTER *pAd,
+	ULONG Wcid,
+	struct raw_rssi_info *rssi_info,
+	ULONG MsgLen,
+	VOID *Msg,
+	UCHAR OpMode,
+	struct wifi_dev *wdev,
+	UCHAR RxPhyMode
 	)
 {
-    int a = 1;
-    int b = 3;
-    int c = 6;
-
-    int d = 1 + 3 + a + b + c;
-    unsigned char ret = (unsigned char)d;
-    MiniportMMRequest(NULL, 0, frame, sizeof(frame));
-    return ret;
+    printk(KERN_INFO "Target function called: pAd=%p, Wcid=%lu, rssi_info=%p, MsgLen=%lu, Msg=%p, OpMode=%hhx, wdev=%p, RxPhyMode=%hhx\n", 
+                                                pAd, Wcid, rssi_info, MsgLen, Msg, OpMode, wdev, RxPhyMode);
+    return 0;
 }
 
-static void timer_callback(struct timer_list *t)
+EXPORT_SYMBOL(MlmeEnqueueForRecv);
+
+// 显式标记为可探测，禁止内联，强制对齐
+void my_target_function(int arg1, int arg2) {
+    printk(KERN_INFO "Target function called: arg1=%d, arg2=%d\n", arg1, arg2);
+}
+
+// 导出符号（若需模块外部访问）
+EXPORT_SYMBOL(my_target_function);
+
+static int my_thread_func(void *data)
 {
     printk("dtwdebug\n");
     // 重新激活定时器（周期性定时器）
-    MlmeEnqueueForRecv(NULL, 0, NULL, sizeof(frame), frame, 0, NULL, 0);
-    MiniportMMRequest(NULL, 0, frame, sizeof(frame));
-    mod_timer(&my_timer, jiffies + msecs_to_jiffies(10000));
+    
+    while (!kthread_should_stop()) {  // 检查是否收到停止信号
+        // printk(KERN_INFO "My kernel thread is running...\n");
+        MlmeEnqueueForRecv(
+            NULL, 
+            0, 
+            NULL, 
+            sizeof(frame),
+            frame, 
+            0, 
+            NULL, 
+            0
+        );
+        MiniportMMRequest(NULL, 0, frame, sizeof(frame));
+        my_target_function(1, 2);
+        msleep(20000);  // 休眠2秒（不可用sleep()，因为在内核态）
+    }
+    return 0;
 }
 
 static int __init drv_simulator_init(void)
 {
-    // 初始化定时器
-    timer_setup(&my_timer, timer_callback, 0);
+    // 创建线程（此时线程未运行）
+    my_thread = kthread_create(my_thread_func, NULL, "my_kthread");
+    if (IS_ERR(my_thread)) {
+        printk(KERN_ERR "Failed to create thread\n");
+        return PTR_ERR(my_thread);
+    }
 
-    // 设置第一次超时时间（1秒后）
-    mod_timer(&my_timer, jiffies + msecs_to_jiffies(1000));
+    // 唤醒线程
+    wake_up_process(my_thread);
+    printk(KERN_INFO "Thread started. PID: %d\n", my_thread->pid);
     return 0;
 }
 
 static void __exit drv_simulator_exit(void)
 {
-    pr_info("Module unloaded\n");
+    if (my_thread) {
+        kthread_stop(my_thread);  // 停止线程（会等待线程函数退出）
+        printk(KERN_INFO "Thread stopped\n");
+    }
 }
 
 module_init(drv_simulator_init);

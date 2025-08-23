@@ -1,0 +1,7 @@
+.drv_simulator*
+.Module*
+drv_simulator.mod*
+.modules.order.cmd
+*.o
+Module*
+modules*

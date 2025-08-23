@@ -232,61 +232,61 @@ int filter_need_handle(struct hdr_s *hdr)
     return ret;
 }
 
-// // MiniportMMRequest
-// SEC("kprobe/MiniportMMRequest")
-// int trace_MiniportMMRequest(struct pt_regs *ctx)
-// {
-//     unsigned int msglen = (unsigned int)PT_REGS_PARM4(ctx);
-//     unsigned char *msg = (unsigned char *)PT_REGS_PARM3(ctx);
-
-//     if (msglen >= sizeof(struct hdr_s))
-//     {
-//         struct hdr_s hdr;
-//         bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
-//         if (filter_need_handle(&hdr)){
-//             static struct event_t data;
-//             bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
-//                 hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-//             if (msglen < sizeof(data.message))
-//             {
-//                 bpf_probe_read_kernel(data.message, msglen, msg);
-//                 data.msglen = msglen;
-//                 int send_len = offsetof(struct event_t, message) + msglen;
-//                 bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
-//             }
-//         }
-//     }
-    
-//     return 0;
-// }
-
 struct my_pt_regs {
 	unsigned int uregs[18];
 };
 
+// MiniportMMRequest
+SEC("kprobe/MiniportMMRequest")
+int trace_MiniportMMRequest(struct my_pt_regs *ctx)
+{
+    unsigned int msglen = (unsigned int)PT_REGS_PARM4(ctx);
+    unsigned char *msg = (unsigned char *)PT_REGS_PARM3(ctx);
+    bpf_printk("request msglen : %u\n", msglen);
+    // if (msglen >= sizeof(struct hdr_s))
+    // {
+    //     struct hdr_s hdr;
+    //     bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
+    //     if (filter_need_handle(&hdr)){
+    //         static struct event_t data;
+    //         bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
+    //             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+    //         if (msglen < sizeof(data.message))
+    //         {
+    //             bpf_probe_read_kernel(data.message, msglen, msg);
+    //             data.msglen = msglen;
+    //             int send_len = offsetof(struct event_t, message) + msglen;
+    //             bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
+    //         }
+    //     }
+    // }
+    
+    return 0;
+}
+
 // MlmeEnqueueForRecv
 SEC("kprobe/MlmeEnqueueForRecv")
-int trace_MlmeEnqueueForRecv(struct my_pt_regs *ctx)
+int __trace_MlmeEnqueueForRecv(struct my_pt_regs *ctx)
 {
     unsigned long msglen = (unsigned long)PT_REGS_PARM4(ctx);
     unsigned char *msg = (unsigned char *)PT_REGS_PARM5(ctx);
-    bpf_printk("msglen : %u\n", msglen);
-    if (msglen >= sizeof(struct hdr_s))
-    {
-        struct hdr_s hdr;
-        bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
-        if (filter_need_handle(&hdr)){
-            static struct event_t data;
-            bpf_printk("[FRAME] from %02x:%02x:%02x:%02x:%02x:%02x\n", 
-                hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-            if (msglen < sizeof(data.message))
-            {
-                bpf_probe_read_kernel(data.message, msglen, msg);
-                data.msglen = msglen;
-                bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
-            }
-        }
-    }
+    bpf_printk("recv msglen : %u\n", msglen);
+    // if (msglen >= sizeof(struct hdr_s))
+    // {
+    //     struct hdr_s hdr;
+    //     bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
+    //     if (filter_need_handle(&hdr)){
+    //         static struct event_t data;
+    //         bpf_printk("[FRAME] from %02x:%02x:%02x:%02x:%02x:%02x\n", 
+    //             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+    //         if (msglen < sizeof(data.message))
+    //         {
+    //             bpf_probe_read_kernel(data.message, msglen, msg);
+    //             data.msglen = msglen;
+    //             bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
+    //         }
+    //     }
+    // }
     
     return 0;
 }
@@ -294,7 +294,20 @@ int trace_MlmeEnqueueForRecv(struct my_pt_regs *ctx)
 SEC("kprobe/dev_hard_start_xmit")
 int __trace_dev_hard_start_xmit(struct pt_regs *ctx)
 {
-    bpf_printk("called\n");
+    pkt_args_t *pkt_filter = CONFIG();
+    bpf_printk("filter addr %02x:%02x:%02x:%02x:%02x:%02x\n", 
+                pkt_filter->addr[0], pkt_filter->addr[1], pkt_filter->addr[2], pkt_filter->addr[3], pkt_filter->addr[4], pkt_filter->addr[5]);
+
+}
+
+// my_target_function
+SEC("kprobe/my_target_function")
+int __trace_my_target_function(struct pt_regs *ctx)
+{
+    pkt_args_t *pkt_filter = CONFIG();
+    bpf_printk("filter addr %02x:%02x:%02x:%02x:%02x:%02x\n", 
+                pkt_filter->addr[0], pkt_filter->addr[1], pkt_filter->addr[2], pkt_filter->addr[3], pkt_filter->addr[4], pkt_filter->addr[5]);
+
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
