@@ -236,78 +236,125 @@ struct my_pt_regs {
 	unsigned int uregs[18];
 };
 
+// #define BPF_PROBE_READ(src, a, ...) ({					    \
+// 	___type((src), a, ##__VA_ARGS__) __r;				    \
+// 	BPF_PROBE_READ_INTO(&__r, (src), a, ##__VA_ARGS__);		    \
+// 	__r;								    \
+// })
+
+// u32 PT_REGS_PARM5_ARM(struct my_pt_regs *ctx)
+// {
+//     u32 sp = PT_REGS_SP(ctx);
+//     u32 arg5;
+//     bpf_probe_read_kernel(&arg5, sizeof(arg5), (void *)(sp + 0x0));
+// }
+
+#define PT_REGS_PARM5_ARM(ctx) ({\
+    u32 sp = (u32)PT_REGS_SP(ctx); \
+    u32 arg5; \
+    bpf_probe_read_kernel(&arg5, sizeof(arg5), (sp + 0x0)); \
+    arg5; \
+})
+
+#define pt_regs_param_0 PT_REGS_PARM1
+#define pt_regs_param_1 PT_REGS_PARM2
+#define pt_regs_param_2 PT_REGS_PARM3
+#define pt_regs_param_3 PT_REGS_PARM4
+#if defined(__TARGET_ARCH_arm)
+// arm32 前四个参数使用R0-R3寄存器，从第五个开始使用栈传递
+#define pt_regs_param_4 PT_REGS_PARM5_ARM
+#else
+#define pt_regs_param_4 PT_REGS_PARM5
+#endif
+
+#if defined(__TARGET_ARCH_arm)
+#define ctx_get_arg(ctx, index) (u32)pt_regs_param_##index((struct my_pt_regs*)ctx)
+#else
+#define ctx_get_arg(ctx, index) (void *)pt_regs_param_##index((struct my_pt_regs*)ctx)
+#endif
+
 // MiniportMMRequest
 SEC("kprobe/MiniportMMRequest")
-int trace_MiniportMMRequest(struct my_pt_regs *ctx)
+int trace_MiniportMMRequest(struct pt_regs *ctx)
 {
-    unsigned int msglen = (unsigned int)PT_REGS_PARM4(ctx);
-    unsigned char *msg = (unsigned char *)PT_REGS_PARM3(ctx);
-    bpf_printk("request msglen : %u\n", msglen);
-    // if (msglen >= sizeof(struct hdr_s))
+    unsigned int msglen = (unsigned int)ctx_get_arg(ctx, 3);
+    unsigned char *msg = (unsigned char *)ctx_get_arg(ctx, 2);
+    // bpf_printk("request msglen : %u\n", msglen);
+    // for (int i = 0; i < 4; i++)
     // {
-    //     struct hdr_s hdr;
-    //     bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
-    //     if (filter_need_handle(&hdr)){
-    //         static struct event_t data;
-    //         bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
-    //             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    //         if (msglen < sizeof(data.message))
-    //         {
-    //             bpf_probe_read_kernel(data.message, msglen, msg);
-    //             data.msglen = msglen;
-    //             int send_len = offsetof(struct event_t, message) + msglen;
-    //             bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
-    //         }
-    //     }
+    //     bpf_printk("arg%d = %x\n", i, ctx->uregs[i]);
     // }
+    if (msglen >= sizeof(struct hdr_s))
+    {
+        struct hdr_s hdr;
+        bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
+        if (filter_need_handle(&hdr)){
+            static struct event_t data;
+            bpf_printk("[FRAME] to %02x:%02x:%02x:%02x:%02x:%02x\n", 
+                hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+            if (msglen < sizeof(data.message))
+            {
+                bpf_probe_read_kernel(data.message, msglen, msg);
+                data.msglen = msglen;
+                int send_len = offsetof(struct event_t, message) + msglen;
+                bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
+            }
+        }
+    }
     
     return 0;
 }
 
 // MlmeEnqueueForRecv
 SEC("kprobe/MlmeEnqueueForRecv")
-int __trace_MlmeEnqueueForRecv(struct my_pt_regs *ctx)
+int __trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
 {
-    unsigned long msglen = (unsigned long)PT_REGS_PARM4(ctx);
-    unsigned char *msg = (unsigned char *)PT_REGS_PARM5(ctx);
-    bpf_printk("recv msglen : %u\n", msglen);
-    // if (msglen >= sizeof(struct hdr_s))
+    unsigned long msglen = (unsigned long)ctx_get_arg(ctx, 3);
+    unsigned char *msg = (unsigned char *)ctx_get_arg(ctx, 4);
+    // bpf_printk("recv msglen : %u\n", msglen);
+    // bpf_printk("recv msg : %p\n", msg);
+    // for (int i = 0; i < 8; i++)
     // {
-    //     struct hdr_s hdr;
-    //     bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
-    //     if (filter_need_handle(&hdr)){
-    //         static struct event_t data;
-    //         bpf_printk("[FRAME] from %02x:%02x:%02x:%02x:%02x:%02x\n", 
-    //             hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
-    //         if (msglen < sizeof(data.message))
-    //         {
-    //             bpf_probe_read_kernel(data.message, msglen, msg);
-    //             data.msglen = msglen;
-    //             bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
-    //         }
-    //     }
+    //     bpf_printk("arg%d = %x\n", i, ctx->uregs[i]);
     // }
+    
+    if (msglen >= sizeof(struct hdr_s))
+    {
+        struct hdr_s hdr;
+        bpf_probe_read_kernel(&hdr, sizeof(hdr), msg);
+        if (filter_need_handle(&hdr)){
+            static struct event_t data;
+            bpf_printk("[FRAME] from %02x:%02x:%02x:%02x:%02x:%02x\n", 
+                hdr.src[0], hdr.src[1], hdr.src[2], hdr.src[3], hdr.src[4], hdr.src[5]);
+            if (msglen < sizeof(data.message))
+            {
+                bpf_probe_read_kernel(data.message, msglen, msg);
+                data.msglen = msglen;
+                bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
+            }
+        }
+    }
     
     return 0;
 }
 
-SEC("kprobe/dev_hard_start_xmit")
-int __trace_dev_hard_start_xmit(struct pt_regs *ctx)
-{
-    pkt_args_t *pkt_filter = CONFIG();
-    bpf_printk("filter addr %02x:%02x:%02x:%02x:%02x:%02x\n", 
-                pkt_filter->addr[0], pkt_filter->addr[1], pkt_filter->addr[2], pkt_filter->addr[3], pkt_filter->addr[4], pkt_filter->addr[5]);
+// SEC("kprobe/dev_hard_start_xmit")
+// int __trace_dev_hard_start_xmit(struct pt_regs *ctx)
+// {
+//     pkt_args_t *pkt_filter = CONFIG();
+//     bpf_printk("filter addr %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//                 pkt_filter->addr[0], pkt_filter->addr[1], pkt_filter->addr[2], pkt_filter->addr[3], pkt_filter->addr[4], pkt_filter->addr[5]);
 
-}
+// }
 
 // my_target_function
-SEC("kprobe/my_target_function")
-int __trace_my_target_function(struct pt_regs *ctx)
-{
-    pkt_args_t *pkt_filter = CONFIG();
-    bpf_printk("filter addr %02x:%02x:%02x:%02x:%02x:%02x\n", 
-                pkt_filter->addr[0], pkt_filter->addr[1], pkt_filter->addr[2], pkt_filter->addr[3], pkt_filter->addr[4], pkt_filter->addr[5]);
+// SEC("kprobe/my_target_function")
+// int __trace_my_target_function(struct pt_regs *ctx)
+// {
+//     pkt_args_t *pkt_filter = CONFIG();
+//     bpf_printk("filter addr %02x:%02x:%02x:%02x:%02x:%02x\n", 
+//                 pkt_filter->addr[0], pkt_filter->addr[1], pkt_filter->addr[2], pkt_filter->addr[3], pkt_filter->addr[4], pkt_filter->addr[5]);
 
-}
+// }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
