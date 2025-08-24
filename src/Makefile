@@ -39,6 +39,7 @@ NOSTDINC_FLAGS	+= -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 		-Wno-gnu-variable-sized-type-not-at-end -Wno-address-of-packed-member \
 		-Wno-tautological-compare -Wno-unknown-warning-option \
 		-Wno-frame-address -DNT_DISABLE_IPV6 -Xclang        \
+		-Wno-int-conversion \
 		-disable-llvm-passes -o - |                                     \
 		opt -O2 -mtriple=bpf-pc-linux |                                 \
 		llvm-dis |                                                      \
