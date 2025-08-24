@@ -234,6 +234,13 @@ struct my_pt_regs {
     arg5; \
 })
 
+#define PT_REGS_PARM6_ARM(ctx) ({\
+    u32 sp = (u32)PT_REGS_SP(ctx); \
+    u32 arg6; \
+    bpf_probe_read_kernel(&arg6, sizeof(arg6), (sp + 0x4)); \
+    arg6; \
+})
+
 #define pt_regs_param_0 PT_REGS_PARM1
 #define pt_regs_param_1 PT_REGS_PARM2
 #define pt_regs_param_2 PT_REGS_PARM3
@@ -241,6 +248,7 @@ struct my_pt_regs {
 #if defined(__TARGET_ARCH_arm)
 // arm32 前四个参数使用R0-R3寄存器，从第五个开始使用栈传递
 #define pt_regs_param_4 PT_REGS_PARM5_ARM
+#define pt_regs_param_5 PT_REGS_PARM6_ARM
 #else
 #define pt_regs_param_4 PT_REGS_PARM5
 #endif
@@ -311,6 +319,77 @@ int __trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
                 bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
             }
         }
+    }
+    
+    return 0;
+}
+
+// RTMPToWirelessSta
+SEC("kprobe/RTMPToWirelessSta")
+int __trace_RTMPToWirelessSta(struct pt_regs *ctx)
+{
+    unsigned char *hdr_802_3 = (unsigned char *)ctx_get_arg(ctx, 2);
+    unsigned int hdr_len = (unsigned int)ctx_get_arg(ctx, 3);
+    unsigned char *data_in = (unsigned char *)ctx_get_arg(ctx, 4);
+    unsigned int date_len = (unsigned int)ctx_get_arg(ctx, 5);
+    static struct event_t data;
+    // bpf_printk("recv hdr_len : %u\n", hdr_len);
+    // bpf_printk("recv hdr_802_3 : %p\n", hdr_802_3);
+    // bpf_printk("recv date_len : %u\n", date_len);
+    // bpf_printk("recv data : %p\n", data);
+    // for (int i = 0; i < 8; i++)
+    // {
+    //     bpf_printk("arg%d = %x\n", i, ctx->uregs[i]);
+    // }
+    if (!hdr_802_3 || !data_in || !hdr_len || !date_len)
+    {
+        bpf_printk("dtwdebug wrong eapol packet\n");
+        return 0;
+    }
+    unsigned char hdr_802_3_local[14];
+    bpf_probe_read_kernel(hdr_802_3_local, sizeof(hdr_802_3_local), hdr_802_3);
+    if (hdr_len >= 14 && hdr_802_3_local[12] == 0x88 && hdr_802_3_local[13] == 0x8e && 
+        date_len + sizeof(header_802_11_t) + 8 < 2048)
+    {
+        header_802_11_t *hdr = (header_802_11_t *)data.message;
+        hdr->FC.Type = FC_TYPE_DATA;
+        hdr->FC.SubType = SUBTYPE_QDATA;
+        hdr->FC.FrDs = 1;
+        bpf_probe_read_kernel(hdr->Dst, 6, hdr_802_3 + 0);
+        bpf_probe_read_kernel(hdr->Src, 6, hdr_802_3 + 6);
+        bpf_probe_read_kernel(hdr->Bssid, 6, hdr_802_3 + 6);
+        data.msglen = sizeof(header_802_11_t);
+
+        // data.message[data.msglen] = 0;  // add qos control userspace
+        // data.msglen += 1;
+        // data.message[data.msglen] = 0;
+        // data.msglen += 1;
+
+        data.message[data.msglen] = 0xaa;
+        data.msglen += 1;
+        data.message[data.msglen] = 0xaa;
+        data.msglen += 1;
+        data.message[data.msglen] = 0x03;
+        data.msglen += 1;
+        data.message[data.msglen] = 0x00;
+        data.msglen += 1;
+        data.message[data.msglen] = 0x00;
+        data.msglen += 1;
+        data.message[data.msglen] = 0x00;
+        data.msglen += 1;
+        data.message[data.msglen] = 0x88;
+        data.msglen += 1;
+        data.message[data.msglen] = 0x8e;
+        data.msglen += 1;
+        // unsigned char llc[8] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e};
+        // bpf_probe_read_kernel(data.message + data.msglen, llc, sizeof(llc));
+        // data.msglen += sizeof(llc);
+
+        bpf_probe_read_kernel(data.message + data.msglen, date_len, data_in);
+        data.msglen += date_len;
+
+        bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
+
     }
     
     return 0;

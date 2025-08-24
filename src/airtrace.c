@@ -8,6 +8,7 @@
 #include "types.h"
 #include "airtrace.h"
 #include "airtrace.skel.h"
+#include "dot11_type.h"
 
 struct pcap_global_hdr_s
 {
@@ -76,8 +77,28 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
     pkt.radiotap_hdr.antenna_signal = -27;
     pkt.radiotap_hdr.antenna_noise = -89;
     pkt.radiotap_hdr.signal_quality = 0x0064;
-	fwrite(&pkt, sizeof(pkt), 1, fp);
-	fwrite(m->message, m->msglen, 1, fp);
+	
+
+	header_802_11_t *hdr = (header_802_11_t *)m->message;
+	if (hdr->FC.Type == FC_TYPE_DATA)
+	{
+		pkt.packet_hdr.capture_len += 2;
+		pkt.packet_hdr.original_len += 2;
+		fwrite(&pkt, sizeof(pkt), 1, fp);
+
+		u16 qos_control = 0;
+		fwrite(hdr, sizeof(header_802_11_t), 1, fp);
+
+		fwrite(&qos_control, sizeof(qos_control), 1, fp);
+		fwrite(m->message + sizeof(header_802_11_t), m->msglen - sizeof(header_802_11_t), 1, fp);
+		// u64 frame_check = 0;
+		// fwrite(&frame_check, sizeof(frame_check), 1, fp);
+	}
+	else
+	{
+		fwrite(&pkt, sizeof(pkt), 1, fp);
+		fwrite(m->message, m->msglen, 1, fp);
+	}
 	fflush(fp);
 	printf("frame msglen %d\n", m->msglen);
 }

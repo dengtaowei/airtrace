@@ -71,13 +71,13 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed)) header_802_11_s
 {
-    frame_control_t FC;
-    u16 Duration;
-    u8 Dst[6];
-    u8 Src[6];
-    u8 Bssid[6];
+    frame_control_t FC; // 2
+    u16 Duration; // 2
+    u8 Dst[6];  // 6
+    u8 Src[6];  // 6
+    u8 Bssid[6];  // 6
     u16 Frag : 4;
-    u16 Sequence : 12;
+    u16 Sequence : 12;  // 2
     u8 Octet[0];
 } header_802_11_t;
 #endif
