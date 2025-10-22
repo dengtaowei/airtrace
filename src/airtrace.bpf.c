@@ -227,7 +227,7 @@ struct my_pt_regs {
 //     u32 arg5;
 //     bpf_probe_read_kernel(&arg5, sizeof(arg5), (void *)(sp + 0x0));
 // }
-
+#if defined(__TARGET_ARCH_arm)
 #define PT_REGS_PARM5_ARM(ctx) ({\
     u32 sp = (u32)PT_REGS_SP(ctx); \
     u32 arg5; \
@@ -241,6 +241,7 @@ struct my_pt_regs {
     bpf_probe_read_kernel(&arg6, sizeof(arg6), (sp + 0x4)); \
     arg6; \
 })
+#endif
 
 #define pt_regs_param_0 PT_REGS_PARM1
 #define pt_regs_param_1 PT_REGS_PARM2
@@ -257,7 +258,7 @@ struct my_pt_regs {
 #if defined(__TARGET_ARCH_arm)
 #define ctx_get_arg(ctx, index) (u32)pt_regs_param_##index((struct my_pt_regs*)ctx)
 #else
-#define ctx_get_arg(ctx, index) (void *)pt_regs_param_##index((struct my_pt_regs*)ctx)
+#define ctx_get_arg(ctx, index) (void *)pt_regs_param_##index((struct pt_regs*)ctx)
 #endif
 
 // MiniportMMRequest
@@ -324,7 +325,7 @@ int __trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
     
     return 0;
 }
-
+#if defined(__TARGET_ARCH_arm)
 // RTMPToWirelessSta
 SEC("kprobe/RTMPToWirelessSta")
 int __trace_RTMPToWirelessSta(struct pt_regs *ctx)
@@ -395,6 +396,7 @@ int __trace_RTMPToWirelessSta(struct pt_regs *ctx)
     
     return 0;
 }
+#endif
 
 // SEC("kprobe/dev_hard_start_xmit")
 // int __trace_dev_hard_start_xmit(struct pt_regs *ctx)
