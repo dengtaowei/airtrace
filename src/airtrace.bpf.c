@@ -211,10 +211,6 @@ int filter_need_handle(header_802_11_t *hdr)
     return ret;
 }
 
-struct my_pt_regs {
-	unsigned int uregs[18];
-};
-
 // #define BPF_PROBE_READ(src, a, ...) ({					    \
 // 	___type((src), a, ##__VA_ARGS__) __r;				    \
 // 	BPF_PROBE_READ_INTO(&__r, (src), a, ##__VA_ARGS__);		    \

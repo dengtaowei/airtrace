@@ -10,6 +10,10 @@
 #include "airtrace.skel.h"
 #include "dot11_type.h"
 
+
+#define MAX_FILE_SIZE (50 * 1024 * 1024) // 50MB
+// #define MAX_FILE_SIZE (512) // 50MB
+
 struct pcap_global_hdr_s
 {
     uint32_t magic;
@@ -77,6 +81,13 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
     pkt.radiotap_hdr.antenna_signal = -27;
     pkt.radiotap_hdr.antenna_noise = -89;
     pkt.radiotap_hdr.signal_quality = 0x0064;
+	static int file_size = 0;
+
+	if (file_size > MAX_FILE_SIZE)
+	{
+		printf("file size %d > %d\n", file_size, MAX_FILE_SIZE);
+		return;
+	}
 	
 
 	header_802_11_t *hdr = (header_802_11_t *)m->message;
@@ -85,19 +96,25 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 		pkt.packet_hdr.capture_len += 2;
 		pkt.packet_hdr.original_len += 2;
 		fwrite(&pkt, sizeof(pkt), 1, fp);
+		file_size += sizeof(pkt);
 
 		u16 qos_control = 0;
 		fwrite(hdr, sizeof(header_802_11_t), 1, fp);
+		file_size += sizeof(header_802_11_t);
 
 		fwrite(&qos_control, sizeof(qos_control), 1, fp);
+		file_size += sizeof(qos_control);
 		fwrite(m->message + sizeof(header_802_11_t), m->msglen - sizeof(header_802_11_t), 1, fp);
+		file_size += m->msglen;
 		// u64 frame_check = 0;
 		// fwrite(&frame_check, sizeof(frame_check), 1, fp);
 	}
 	else
 	{
 		fwrite(&pkt, sizeof(pkt), 1, fp);
+		file_size += sizeof(pkt);
 		fwrite(m->message, m->msglen, 1, fp);
+		file_size += m->msglen;
 	}
 	fflush(fp);
 	printf("frame msglen %d\n", m->msglen);
