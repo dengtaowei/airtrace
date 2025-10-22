@@ -396,6 +396,112 @@ int __trace_RTMPToWirelessSta(struct pt_regs *ctx)
     
     return 0;
 }
+
+
+#elif defined(__TARGET_ARCH_arm64)
+// struct sk_buff: 416
+// struct sk_buff::dev             offset =   16, size =    8
+// struct sk_buff::sk              offset =   24, size =    8
+// struct sk_buff::cb              offset =   40, size =   48
+// struct sk_buff::skb_iif         offset =  144, size =    4
+// struct sk_buff::protocol        offset =  172, size =    2
+// struct sk_buff::transport_header offset =  174, size =    2
+// struct sk_buff::network_header  offset =  176, size =    2
+// struct sk_buff::mac_header      offset =  178, size =    2
+// struct sk_buff::head            offset =  384, size =    8
+// struct sk_buff::len             offset =  112, size =    4
+// struct sk_buff::data            offset =  392, size =    8
+#define SKB_MAC_HEADER_OFFSET 178
+#define SKB_HEAD_OFFSET 384
+#define SKB_NETWORK_HEADER_OFFSET 176
+#define SKB_DATA_OFFSET 392
+#define SKB_LEN_OFFSET 112
+struct my_arphdr {
+	u16 hw_type;       // 硬件类型 (1 for Ethernet)
+    u16 proto_type;    // 协议类型 (0x0800 for IPv4)
+    u8 hw_len;         // 硬件地址长度 (6 for MAC)
+    u8 proto_len;      // 协议地址长度 (4 for IPv4)
+    u16 opcode;        // 操作码 (1 for ARP Request)
+    u8 sender_mac[6];  // 发送方MAC
+    u8 sender_ip[4];   // 发送方IP
+    u8 target_mac[6];  // 目标MAC (00:00:00:00:00:00)
+    u8 target_ip[4];   // 目标IP
+}__attribute__((__packed__));
+// send_data_pkt
+SEC("kprobe/send_data_pkt")
+int __trace_send_data_pkt(struct pt_regs *ctx)
+{
+    void* skb = (void *)ctx_get_arg(ctx, 2);
+	u16 mac_header;
+	// u16 network_header;
+	unsigned char *head;
+    unsigned char *data;
+    unsigned int len;
+    static struct event_t event;
+
+    bpf_probe_read_kernel(&len, sizeof(len), skb + SKB_LEN_OFFSET);
+
+	bpf_probe_read_kernel(&data, sizeof(data), skb + SKB_DATA_OFFSET);
+
+	if (len < sizeof(struct ethhdr))
+	{
+		return 0;
+	}
+
+    struct ethhdr eth_header;
+	bpf_probe_read_kernel(&eth_header, sizeof(eth_header), data);
+    if (eth_header.h_proto != 0x8e88)
+    {
+        return 0;
+    }
+
+    // bpf_printk("dtwdebug error proto: 0x%x, len = %d, buffer %d", eth_header.h_proto, len, sizeof(event.message) - 24 - 8 + 14);
+
+
+	header_802_11_t *hdr = (header_802_11_t *)event.message;
+
+    if (len < sizeof(event.message) - 24 - 8 + 14 && len - 14 > 0)
+    {
+        bpf_probe_read_kernel(event.message + 24 + 8 - 14, len, data);
+        event.msglen += (len - 14);
+    }
+
+    hdr->FC.Type = FC_TYPE_DATA;
+    hdr->FC.SubType = SUBTYPE_QDATA;
+    hdr->FC.FrDs = 1;
+    bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
+    bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
+    bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+    event.msglen += sizeof(header_802_11_t);
+
+    // data.message[data.msglen] = 0;  // add qos control userspace
+    // data.msglen += 1;
+    // data.message[data.msglen] = 0;
+    // data.msglen += 1;
+
+    event.message[sizeof(header_802_11_t) + 0] = 0xaa;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 1] = 0xaa;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 2] = 0x03;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 3] = 0x00;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 4] = 0x00;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 5] = 0x00;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 6] = 0x88;
+    event.msglen += 1;
+    event.message[sizeof(header_802_11_t) + 7] = 0x8e;
+    event.msglen += 1;
+    // unsigned char llc[8] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e};
+    // bpf_probe_read_kernel(data.message + data.msglen, llc, sizeof(llc));
+    // data.msglen += sizeof(llc);
+    
+    bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
+    return 0;
+}
 #endif
 
 // SEC("kprobe/dev_hard_start_xmit")

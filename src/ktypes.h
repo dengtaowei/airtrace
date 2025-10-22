@@ -179,4 +179,10 @@ struct pt_regs {
 
 #endif
 
+struct ethhdr {
+	unsigned char h_dest[6];
+	unsigned char h_source[6];
+	__be16 h_proto;
+}__attribute__((__packed__));
+
 #endif
