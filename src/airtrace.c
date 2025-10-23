@@ -66,8 +66,8 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 {
 	struct event_t *m = data;
 	struct pcap_mypkt pkt;
-	pkt.packet_hdr.timestamp_s = 0x5fa45360;
-    pkt.packet_hdr.timestamp_us = 0;
+	pkt.packet_hdr.timestamp_s = m->timestamp_ns / 1000000000;;
+    pkt.packet_hdr.timestamp_us = (m->timestamp_ns % 10000000000) / 1000;
     pkt.packet_hdr.capture_len = m->msglen + sizeof(pkt.radiotap_hdr);
     pkt.packet_hdr.original_len = m->msglen + sizeof(pkt.radiotap_hdr);
     pkt.radiotap_hdr.revision = 0;

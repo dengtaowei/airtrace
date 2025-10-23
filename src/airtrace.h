@@ -5,6 +5,7 @@
 
 struct event_t {
     u32 msglen;
+    u64 timestamp_ns;
     u8 message[2048];
 };
 

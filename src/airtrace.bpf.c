@@ -280,6 +280,7 @@ int trace_MiniportMMRequest(struct pt_regs *ctx)
             {
                 bpf_probe_read_kernel(data.message, msglen, msg);
                 data.msglen = msglen;
+                data.timestamp_ns = bpf_ktime_get_ns();
                 int send_len = offsetof(struct event_t, message) + msglen;
                 bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, send_len);
             }
@@ -314,6 +315,7 @@ int __trace_MlmeEnqueueForRecv(struct pt_regs *ctx)
             {
                 bpf_probe_read_kernel(data.message, msglen, msg);
                 data.msglen = msglen;
+                data.timestamp_ns = bpf_ktime_get_ns();
                 bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
             }
         }
@@ -385,7 +387,7 @@ int __trace_RTMPToWirelessSta(struct pt_regs *ctx)
 
         bpf_probe_read_kernel(data.message + data.msglen, date_len, data_in);
         data.msglen += date_len;
-
+        data.timestamp_ns = bpf_ktime_get_ns();
         bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &data, sizeof(data));
 
     }
@@ -494,7 +496,7 @@ int __trace_send_data_pkt(struct pt_regs *ctx)
     // unsigned char llc[8] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e};
     // bpf_probe_read_kernel(data.message + data.msglen, llc, sizeof(llc));
     // data.msglen += sizeof(llc);
-    
+    event.timestamp_ns = bpf_ktime_get_ns();
     bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
     return 0;
 }

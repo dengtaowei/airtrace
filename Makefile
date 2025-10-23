@@ -1,10 +1,17 @@
 export VERSION	= 1.2.11
 
-ARCH=arm
-CROSS_COMPILE=arm-linux-gnueabi-
+ARCH=arm64
+CROSS_COMPILE=aarch64-linux-gnu-
 export CROSS_COMPILE
-CC=arm-linux-gnueabi-gcc
+CC=aarch64-linux-gnu-gcc
 export CC
+
+# ARCH=arm
+# CROSS_COMPILE=arm-linux-gnueabi-
+# export CROSS_COMPILE
+# CC=arm-linux-gnueabi-gcc
+# export CC
+
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
 			 | sed 's/arm.*/arm/' \
 			 | sed 's/aarch64/arm64/' \
