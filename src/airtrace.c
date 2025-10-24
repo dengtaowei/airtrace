@@ -5,6 +5,8 @@
 #include <bpf/libbpf.h>
 #include <stdint.h>
 #include <signal.h>
+#include <time.h>
+#include <sys/sysinfo.h>
 #include "types.h"
 #include "airtrace.h"
 #include "airtrace.skel.h"
@@ -61,12 +63,22 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 
 	return vfprintf(stderr, format, args);
 }
+
+static time_t cached_boot_time;
+
+// 初始化时调用一次
+void init_time_converter() {
+    struct sysinfo info;
+    sysinfo(&info);
+    cached_boot_time = time(NULL) - info.uptime;
+}
+
 FILE *fp = NULL;
 void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 {
 	struct event_t *m = data;
 	struct pcap_mypkt pkt;
-	pkt.packet_hdr.timestamp_s = m->timestamp_ns / 1000000000;;
+	pkt.packet_hdr.timestamp_s = m->timestamp_ns / 1000000000 + cached_boot_time;
     pkt.packet_hdr.timestamp_us = (m->timestamp_ns % 10000000000) / 1000;
     pkt.packet_hdr.capture_len = m->msglen + sizeof(pkt.radiotap_hdr);
     pkt.packet_hdr.original_len = m->msglen + sizeof(pkt.radiotap_hdr);
@@ -188,6 +200,8 @@ int main(int argc, char *argv[])
         perror("sigaction 失败");
         exit(EXIT_FAILURE);
     }
+
+	init_time_converter();
 
 
 	libbpf_set_print(libbpf_print_fn);
