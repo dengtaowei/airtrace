@@ -199,13 +199,19 @@ int filter_need_handle(header_802_11_t *hdr)
     // unsigned char filter_mac[6] = {0xd4, 0xd7, 0xcf, 0xd1, 0x7c, 0xa9};
 
     pkt_args_t *pkt_filter = CONFIG();
-    if (mac_eaqul(hdr->Src, pkt_filter->addr))
+
+    for (int i = 0; i < pkt_filter->mac_num && i < MAX_MAC_FILTER; i++)
     {
-        ret = 1;
-    }
-    else if (mac_eaqul(hdr->Dst, pkt_filter->addr))
-    {
-        ret = 1;
+        if (0 == __builtin_memcmp(hdr->Src, pkt_filter->addr[i], 6))
+        {
+            ret = 1;
+            break;
+        }
+        else if (0 == __builtin_memcmp(hdr->Dst, pkt_filter->addr[i], 6))
+        {
+            ret = 1;
+            break;
+        }
     }
 
     return ret;
@@ -430,9 +436,9 @@ SEC("kprobe/send_data_pkt")
 int __trace_send_data_pkt(struct pt_regs *ctx)
 {
     void* skb = (void *)ctx_get_arg(ctx, 2);
-	u16 mac_header;
+	// u16 mac_header;
 	// u16 network_header;
-	unsigned char *head;
+	// unsigned char *head;
     unsigned char *data;
     unsigned int len;
     static struct event_t event;

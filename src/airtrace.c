@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/sysinfo.h>
+#include <argp.h>
 #include "types.h"
 #include "airtrace.h"
 #include "airtrace.skel.h"
@@ -15,6 +16,37 @@
 
 #define MAX_FILE_SIZE (50 * 1024 * 1024) // 50MB
 // #define MAX_FILE_SIZE (512) // 50MB
+
+static struct env {
+	unsigned char filter_mac[MAX_MAC_FILTER][6];
+	int mac_num;
+    char file[128];
+	int max_size;
+} env = {
+	.filter_mac = { { 0 } },
+	.mac_num = 0,
+	.file = "./airtrace.pcap",
+	.max_size = MAX_FILE_SIZE
+};
+
+
+const char *argp_program_version = "airtrace 0.1";
+const char *argp_program_bug_address =
+	"modified from https://github.com/iovisor/bcc/tree/master/libbpf-tools";
+
+const char argp_args_doc[] =
+"Trace outstanding memory allocations\n"
+"\n"
+"USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file]\n"
+"\n"
+"";
+
+static const struct argp_option argp_options[] = {
+	{"max-size", 'Z', "MAX_SIZE", 0, "maximum capture file size"},
+    {"output", 'o', "FILE", 0, "output file"},
+	{"mac", 'm', "MAC_ADDR", 0, "Specify one or more MAC addresses (comma-separated)"},
+	{ 0 }
+};
 
 struct pcap_global_hdr_s
 {
@@ -95,9 +127,9 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
     pkt.radiotap_hdr.signal_quality = 0x0064;
 	static int file_size = 0;
 
-	if (file_size > MAX_FILE_SIZE)
+	if (file_size > env.max_size)
 	{
-		printf("file size %d > %d\n", file_size, MAX_FILE_SIZE);
+		printf("file size %d > %d\n", file_size, env.max_size);
 		return;
 	}
 	
@@ -183,12 +215,87 @@ extern LIBBPF_API int bpf_map_update_elem(int fd, const void *key, const void *v
 
 // }
 
+long argp_parse_long(int key, const char *arg, struct argp_state *state)
+{
+	errno = 0;
+	const long temp = strtol(arg, NULL, 10);
+	if (errno || temp <= 0) {
+		fprintf(stderr, "error arg:%c %s\n", (char)key, arg);
+		argp_usage(state);
+	}
+
+	return temp;
+}
+
+static void parse_mac_filter(struct env *env, char *arg)
+{
+	 char *token = strtok(arg, ",");
+	while (token) {
+		if (env->mac_num >= sizeof(env->filter_mac) / sizeof(env->filter_mac[0]))
+		{
+			return;
+		}
+
+		if (strlen(token) == 17 && strchr(token, ':')) {
+			sscanf(token, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
+               &env->filter_mac[env->mac_num][0], &env->filter_mac[env->mac_num][1], 
+			   &env->filter_mac[env->mac_num][2], &env->filter_mac[env->mac_num][3], 
+			   &env->filter_mac[env->mac_num][4], &env->filter_mac[env->mac_num][5]);
+			env->mac_num++;
+		} else {
+			fprintf(stderr, "Invalid MAC format: %s\n", token);
+			return;
+		}
+		token = strtok(NULL, ",");
+	}
+}
+
+error_t argp_parse_arg(int key, char *arg, struct argp_state *state)
+{
+	switch (key) {
+	case 'o':
+		// env.min_age_ns = 1e6 * atoi(arg);
+		snprintf(env.file, sizeof(env.file), "%s", arg);
+		break;
+	case 'Z':
+		env.max_size = atoi(arg);
+		break;
+	case 'm':
+		parse_mac_filter(&env, arg);
+		break;
+	default:
+		return ARGP_ERR_UNKNOWN;
+	}
+
+	return 0;
+}
+
+#include <sys/resource.h>
+
+int liberate_l()
+{
+	struct rlimit lim = {RLIM_INFINITY, RLIM_INFINITY};
+	return setrlimit(RLIMIT_MEMLOCK, &lim);
+}
+
 int main(int argc, char *argv[])
 {
     struct airtrace_bpf *skel;
 	// struct bpf_object_open_opts *o;
     int err;
 	struct perf_buffer *pb = NULL;
+
+	static const struct argp argp = {
+		.options = argp_options,
+		.parser = argp_parse_arg,
+		.doc = argp_args_doc,
+	};
+
+    // parse command line args to env settings
+	if (argp_parse(&argp, argc, argv, 0, NULL, NULL)) {
+		perror("failed to parse args");
+        exit(EXIT_FAILURE);
+	}
 
 	struct sigaction sa;
     sa.sa_handler = sigint_handler;
@@ -206,12 +313,14 @@ int main(int argc, char *argv[])
 
 	libbpf_set_print(libbpf_print_fn);
 
-	char log_buf[64 * 1024];
+	char log_buf[512 * 1024];
 	LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.kernel_log_buf = log_buf,
 		.kernel_log_size = sizeof(log_buf),
 		.kernel_log_level = 1,
 	);
+
+	liberate_l();
 
 	skel = airtrace_bpf__open_opts(&opts);
 	if (!skel) {
@@ -238,14 +347,8 @@ int main(int argc, char *argv[])
 	bpf_args_t bpf_args;
 	// unsigned char filter_mac[6] = {0xd4, 0xd7, 0xcf, 0xd1, 0x7c, 0xa9};
 	memset(&bpf_args, 0, sizeof(bpf_args));
-
-	if (argc >= 3 && 0 == strcmp(argv[1], "--addr"))
-	{
-		sscanf(argv[2], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
-			&bpf_args.pkt.addr[0], &bpf_args.pkt.addr[1], &bpf_args.pkt.addr[2], 
-			&bpf_args.pkt.addr[3], &bpf_args.pkt.addr[4], &bpf_args.pkt.addr[5]);
-	}
-	
+	memcpy(bpf_args.pkt.addr, env.filter_mac, sizeof(bpf_args.pkt.addr));
+	bpf_args.pkt.mac_num = env.mac_num;
 
 	bpf_set_config(skel, bss, bpf_args);
 
@@ -266,7 +369,7 @@ int main(int argc, char *argv[])
 	}
 
 	// 写入文件
-    fp = fopen("test.pcap", "wb");
+    fp = fopen(env.file, "wb");
     if (!fp)
     {
         perror("Failed to open file");

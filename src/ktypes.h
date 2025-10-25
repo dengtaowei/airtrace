@@ -22,6 +22,9 @@ typedef __s64 s64;
 typedef __u16 u16;
 
 typedef int __s32;
+
+typedef __u64 u64;
+
 enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC = 0,
 	BPF_MAP_TYPE_HASH = 1,
