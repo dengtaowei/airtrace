@@ -127,7 +127,7 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
     pkt.radiotap_hdr.signal_quality = 0x0064;
 	static int file_size = 0;
 
-	if (file_size > env.max_size)
+	if (file_size > env.max_size && fp != stdout)
 	{
 		printf("file size %d > %d\n", file_size, env.max_size);
 		return;
@@ -161,7 +161,10 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 		file_size += m->msglen;
 	}
 	fflush(fp);
-	printf("frame msglen %d\n", m->msglen);
+	if (fp != stdout)
+	{
+		printf("frame msglen %d\n", m->msglen);
+	}
 }
 
 void lost_event(void *ctx, int cpu, long long unsigned int data_sz)
@@ -330,11 +333,14 @@ int main(int argc, char *argv[])
 
 	err = airtrace_bpf__load(skel);
 	// Print the verifier log
-	for (int i=0; i < sizeof(log_buf); i++) {
-		if (log_buf[i] == 0 && log_buf[i+1] == 0) {
-			break;
+	if (0 != strcmp(env.file, "-"))
+	{
+		for (int i=0; i < sizeof(log_buf); i++) {
+			if (log_buf[i] == 0 && log_buf[i+1] == 0) {
+				break;
+			}
+			printf("%c", log_buf[i]);
 		}
-		printf("%c", log_buf[i]);
 	}
 	
 	if (err) {
@@ -369,12 +375,14 @@ int main(int argc, char *argv[])
 	}
 
 	// 写入文件
-    fp = fopen(env.file, "wb");
-    if (!fp)
-    {
-        perror("Failed to open file");
-        return 1;
-    }
+    if (0 == strcmp(env.file, "-"))
+	{
+		fp = stdout;
+	}
+	else
+	{
+    	fp = fopen(env.file, "wb");
+	}
 
 	struct pcap_global_hdr_s global_hdr;
 	global_hdr.magic = 0xa1b2c3d4;
@@ -386,8 +394,10 @@ int main(int argc, char *argv[])
     global_hdr.linktype = 0x7f; // 802.11 pkt
     fwrite(&global_hdr, sizeof(global_hdr), 1, fp);
 
-
-	printf("begin capture...\n");
+	if (fp != stdout)
+	{
+		printf("begin capture...\n");
+	}
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
 		// Ctrl-C gives -EINTR
@@ -404,7 +414,11 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	printf("end capture...\n");
+
+	if (fp != stdout)
+	{
+		printf("end capture...\n");
+	}
 
     fclose(fp);
 
