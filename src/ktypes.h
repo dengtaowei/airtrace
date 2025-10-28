@@ -25,6 +25,8 @@ typedef int __s32;
 
 typedef __u64 u64;
 
+typedef __u16 __sum16;
+
 enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC = 0,
 	BPF_MAP_TYPE_HASH = 1,
@@ -97,6 +99,8 @@ typedef int __s32;
 typedef __s32 s32;
 
 typedef __u64 u64;
+
+typedef __u16 __sum16;
 
 enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC = 0,
@@ -186,6 +190,79 @@ struct ethhdr {
 	unsigned char h_dest[6];
 	unsigned char h_source[6];
 	__be16 h_proto;
+}__attribute__((__packed__));
+
+struct iphdr {
+	__u8 ihl: 4;
+	__u8 version: 4;
+	__u8 tos;
+	__be16 tot_len;
+	__be16 id;
+	__be16 frag_off;
+	__u8 ttl;
+	__u8 protocol;
+	__sum16 check;
+	union {
+		struct {
+			__be32 saddr;
+			__be32 daddr;
+		};
+		struct {
+			__be32 saddr;
+			__be32 daddr;
+		} addrs;
+	};
+}__attribute__((__packed__));
+
+
+struct udphdr {
+	__be16 source;
+	__be16 dest;
+	__be16 len;
+	__sum16 check;
+}__attribute__((__packed__));
+
+
+struct in6_addr {
+	union {
+		__u8 u6_addr8[16];
+		__be16 u6_addr16[8];
+		__be32 u6_addr32[4];
+	} in6_u;
+}__attribute__((__packed__));
+
+struct ipv6hdr {
+	__u8 priority: 4;
+	__u8 version: 4;
+	__u8 flow_lbl[3];
+	__be16 payload_len;
+	__u8 nexthdr;
+	__u8 hop_limit;
+	union {
+		struct {
+			struct in6_addr saddr;
+			struct in6_addr daddr;
+		};
+		struct {
+			struct in6_addr saddr;
+			struct in6_addr daddr;
+		} addrs;
+	};
+}__attribute__((__packed__));
+
+
+struct icmp6hdr {
+	__u8 icmp6_type;
+	__u8 icmp6_code;
+	__sum16 icmp6_cksum;
+	// union {
+	// 	__be32 un_data32[1];
+	// 	__be16 un_data16[2];
+	// 	__u8 un_data8[4];
+	// 	struct icmpv6_echo u_echo;
+	// 	struct icmpv6_nd_advt u_nd_advt;
+	// 	struct icmpv6_nd_ra u_nd_ra;
+	// } icmp6_dataun;
 }__attribute__((__packed__));
 
 #endif
