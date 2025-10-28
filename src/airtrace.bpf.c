@@ -564,7 +564,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
     struct ethhdr eth_header;
 	bpf_probe_read_kernel(&eth_header, sizeof(eth_header), head + mac_header);
 
-    if (eth_header.h_proto != 0x0008)  // ipv4
+    if (eth_header.h_proto != 0x0008 && eth_header.h_proto != 0xdd86)  // ipv4 or ipv6
     {
         return 0;
     }
@@ -577,64 +577,124 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
     // bpf_printk("error proto 0x%x, %02x:%02x:%02x:%02x:%02x:%02x", eth_header.h_proto, 
     //     eth_header.h_source[0], eth_header.h_source[1], eth_header.h_source[2], 
     //     eth_header.h_source[3], eth_header.h_source[4], eth_header.h_source[5]);
-    struct iphdr ip_header;
-    bpf_probe_read_kernel(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
-    // bpf_printk("ipv4 ver %d, len %d, protocol %d", ip_header.version, ip_header.ihl, ip_header.protocol);
-
-    if (ip_header.ihl != 5 || ip_header.protocol != 17)  // not udp
+    if (eth_header.h_proto == 0x0008)
     {
-        return 0;
-    }
+        struct iphdr ip_header;
+        bpf_probe_read_kernel(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
+        // bpf_printk("ipv4 ver %d, len %d, protocol %d", ip_header.version, ip_header.ihl, ip_header.protocol);
 
-    struct udphdr udp_header;
-    bpf_probe_read_kernel(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
-    // bpf_printk("udp src port %d, dst port %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), udp_header.len);
-    if (bpf_ntohs(udp_header.source) != 68 || bpf_ntohs(udp_header.dest) != 67)
+        if (ip_header.ihl != 5 || ip_header.protocol != 17)  // not udp
+        {
+            return 0;
+        }
+
+        struct udphdr udp_header;
+        bpf_probe_read_kernel(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
+        // bpf_printk("udp src port %d, dst port %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), udp_header.len);
+        if (bpf_ntohs(udp_header.source) != 68 || bpf_ntohs(udp_header.dest) != 67)
+        {
+            return 0;
+        }
+        // bpf_printk("udp src port %d, dst port %d, udplen %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), bpf_ntohs(udp_header.len), len);
+        
+        // bpf_printk("head %p, data %p, data - head %d, mac_header %d, network_header %d, ", head, data, data - head, mac_header, network_header);
+
+        header_802_11_t *hdr = (header_802_11_t *)event.message;
+
+        u16 udp_len = bpf_ntohs(udp_header.len); // 确保非负
+
+        if (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14 > 0)
+        {
+            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
+            event.msglen += (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14);
+        }
+
+
+        hdr->FC.Type = FC_TYPE_DATA;
+        hdr->FC.SubType = SUBTYPE_QDATA;
+        hdr->FC.FrDs = 1;
+        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        event.msglen += sizeof(header_802_11_t);
+
+        event.message[sizeof(header_802_11_t) + 0] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 1] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 2] = 0x03;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 3] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 4] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 5] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 6] = 0x08;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 7] = 0x00;
+        event.msglen += 1;
+
+        event.timestamp_ns = bpf_ktime_get_ns();
+        bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
+    }
+    else if (eth_header.h_proto == 0xdd86)
     {
-        return 0;
+        struct ipv6hdr ipv6_header;
+        bpf_probe_read_kernel(&ipv6_header, sizeof(ipv6_header), head + mac_header + sizeof(struct ethhdr));
+
+        if (ipv6_header.nexthdr != 0x3a)  // not icmpv6
+        {
+            return 0;
+        }
+
+        struct icmp6hdr icmp6_header;
+        bpf_probe_read_kernel(&icmp6_header, sizeof(icmp6_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct ipv6hdr));
+        if (icmp6_header.icmp6_type != 133 && icmp6_header.icmp6_type != 134)
+        {
+            return 0;
+        }
+        
+
+        header_802_11_t *hdr = (header_802_11_t *)event.message;
+
+        u16 icmp6_len = bpf_ntohs(ipv6_header.payload_len); // 确保非负
+
+        if (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14 > 0)
+        {
+            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len, head + mac_header);
+            event.msglen += (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14);
+        }
+
+
+        hdr->FC.Type = FC_TYPE_DATA;
+        hdr->FC.SubType = SUBTYPE_QDATA;
+        hdr->FC.FrDs = 1;
+        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        event.msglen += sizeof(header_802_11_t);
+
+        event.message[sizeof(header_802_11_t) + 0] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 1] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 2] = 0x03;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 3] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 4] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 5] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 6] = 0x86;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 7] = 0xdd;
+        event.msglen += 1;
+
+        event.timestamp_ns = bpf_ktime_get_ns();
+        bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
     }
-    bpf_printk("udp src port %d, dst port %d, udplen %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), bpf_ntohs(udp_header.len), len);
-    
-    bpf_printk("head %p, data %p, data - head %d, mac_header %d, network_header %d, ", head, data, data - head, mac_header, network_header);
-
-    header_802_11_t *hdr = (header_802_11_t *)event.message;
-
-    u16 udp_len = bpf_ntohs(udp_header.len); // 确保非负
-
-    if (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14 > 0)
-    {
-        bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
-        event.msglen += (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14);
-    }
-
-
-    hdr->FC.Type = FC_TYPE_DATA;
-    hdr->FC.SubType = SUBTYPE_QDATA;
-    hdr->FC.FrDs = 1;
-    bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-    bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-    bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
-    event.msglen += sizeof(header_802_11_t);
-
-    event.message[sizeof(header_802_11_t) + 0] = 0xaa;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 1] = 0xaa;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 2] = 0x03;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 3] = 0x00;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 4] = 0x00;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 5] = 0x00;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 6] = 0x08;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 7] = 0x00;
-    event.msglen += 1;
-
-    event.timestamp_ns = bpf_ktime_get_ns();
-    bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
 
     return 0;
 
@@ -669,7 +729,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
     struct ethhdr eth_header;
 	bpf_probe_read_kernel(&eth_header, sizeof(eth_header), head + mac_header);
 
-    if (eth_header.h_proto != 0x0008)  // ipv4
+    if (eth_header.h_proto != 0x0008 && eth_header.h_proto != 0xdd86)  // ipv4 or ipv6
     {
         return 0;
     }
@@ -682,64 +742,125 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
     // bpf_printk("error proto 0x%x, %02x:%02x:%02x:%02x:%02x:%02x", eth_header.h_proto, 
     //     eth_header.h_source[0], eth_header.h_source[1], eth_header.h_source[2], 
     //     eth_header.h_source[3], eth_header.h_source[4], eth_header.h_source[5]);
-    struct iphdr ip_header;
-    bpf_probe_read_kernel(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
-    // bpf_printk("ipv4 ver %d, len %d, protocol %d", ip_header.version, ip_header.ihl, ip_header.protocol);
 
-    if (ip_header.ihl != 5 || ip_header.protocol != 17)  // not udp
+    if (eth_header.h_proto == 0x0008)
     {
-        return 0;
-    }
+        struct iphdr ip_header;
+        bpf_probe_read_kernel(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
+        // bpf_printk("ipv4 ver %d, len %d, protocol %d", ip_header.version, ip_header.ihl, ip_header.protocol);
 
-    struct udphdr udp_header;
-    bpf_probe_read_kernel(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
-    // bpf_printk("udp src port %d, dst port %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), udp_header.len);
-    if (bpf_ntohs(udp_header.source) != 67 || bpf_ntohs(udp_header.dest) != 68)
+        if (ip_header.ihl != 5 || ip_header.protocol != 17)  // not udp
+        {
+            return 0;
+        }
+
+        struct udphdr udp_header;
+        bpf_probe_read_kernel(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
+        // bpf_printk("udp src port %d, dst port %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), udp_header.len);
+        if (bpf_ntohs(udp_header.source) != 67 || bpf_ntohs(udp_header.dest) != 68)
+        {
+            return 0;
+        }
+        // bpf_printk("udp src port %d, dst port %d, udplen %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), bpf_ntohs(udp_header.len), len);
+        
+        // bpf_printk("head %p, data %p, data - head %d, mac_header %d, network_header %d, ", head, data, data - head, mac_header, network_header);
+
+        header_802_11_t *hdr = (header_802_11_t *)event.message;
+
+        u16 udp_len = bpf_ntohs(udp_header.len); // 确保非负
+
+        if (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14 > 0)
+        {
+            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
+            event.msglen += (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14);
+        }
+
+
+        hdr->FC.Type = FC_TYPE_DATA;
+        hdr->FC.SubType = SUBTYPE_QDATA;
+        hdr->FC.FrDs = 1;
+        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        event.msglen += sizeof(header_802_11_t);
+
+        event.message[sizeof(header_802_11_t) + 0] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 1] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 2] = 0x03;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 3] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 4] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 5] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 6] = 0x08;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 7] = 0x00;
+        event.msglen += 1;
+
+        event.timestamp_ns = bpf_ktime_get_ns();
+        bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
+    }
+    else if (eth_header.h_proto == 0xdd86)
     {
-        return 0;
+        struct ipv6hdr ipv6_header;
+        bpf_probe_read_kernel(&ipv6_header, sizeof(ipv6_header), head + mac_header + sizeof(struct ethhdr));
+
+        if (ipv6_header.nexthdr != 0x3a)  // not icmpv6
+        {
+            return 0;
+        }
+
+        struct icmp6hdr icmp6_header;
+        bpf_probe_read_kernel(&icmp6_header, sizeof(icmp6_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct ipv6hdr));
+        if (icmp6_header.icmp6_type != 133 && icmp6_header.icmp6_type != 134)
+        {
+            return 0;
+        }
+        
+
+        header_802_11_t *hdr = (header_802_11_t *)event.message;
+
+        u16 icmp6_len = bpf_ntohs(ipv6_header.payload_len); // 确保非负
+
+        if (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14 > 0)
+        {
+            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len, head + mac_header);
+            event.msglen += (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14);
+        }
+
+
+        hdr->FC.Type = FC_TYPE_DATA;
+        hdr->FC.SubType = SUBTYPE_QDATA;
+        hdr->FC.FrDs = 1;
+        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        event.msglen += sizeof(header_802_11_t);
+
+        event.message[sizeof(header_802_11_t) + 0] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 1] = 0xaa;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 2] = 0x03;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 3] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 4] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 5] = 0x00;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 6] = 0x86;
+        event.msglen += 1;
+        event.message[sizeof(header_802_11_t) + 7] = 0xdd;
+        event.msglen += 1;
+
+        event.timestamp_ns = bpf_ktime_get_ns();
+        bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
     }
-    bpf_printk("udp src port %d, dst port %d, udplen %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), bpf_ntohs(udp_header.len), len);
-    
-    bpf_printk("head %p, data %p, data - head %d, mac_header %d, network_header %d, ", head, data, data - head, mac_header, network_header);
-
-    header_802_11_t *hdr = (header_802_11_t *)event.message;
-
-    u16 udp_len = bpf_ntohs(udp_header.len); // 确保非负
-
-    if (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14 > 0)
-    {
-        bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
-        event.msglen += (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14);
-    }
-
-
-    hdr->FC.Type = FC_TYPE_DATA;
-    hdr->FC.SubType = SUBTYPE_QDATA;
-    hdr->FC.FrDs = 1;
-    bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-    bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-    bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
-    event.msglen += sizeof(header_802_11_t);
-
-    event.message[sizeof(header_802_11_t) + 0] = 0xaa;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 1] = 0xaa;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 2] = 0x03;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 3] = 0x00;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 4] = 0x00;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 5] = 0x00;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 6] = 0x08;
-    event.msglen += 1;
-    event.message[sizeof(header_802_11_t) + 7] = 0x00;
-    event.msglen += 1;
-
-    event.timestamp_ns = bpf_ktime_get_ns();
-    bpf_perf_event_output(ctx, &output, BPF_F_CURRENT_CPU, &event, sizeof(event));
     return 0;
 }
 

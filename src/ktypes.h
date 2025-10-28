@@ -196,7 +196,7 @@ struct iphdr {
 	__u8 ihl: 4;
 	__u8 version: 4;
 	__u8 tos;
-	__be16 tot_len;
+	__be16 tot_len;  // Including header information
 	__be16 id;
 	__be16 frag_off;
 	__u8 ttl;
