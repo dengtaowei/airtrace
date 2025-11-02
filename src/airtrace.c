@@ -5,10 +5,48 @@
 #include <bpf/libbpf.h>
 #include <stdint.h>
 #include <signal.h>
+#include <time.h>
+#include <sys/sysinfo.h>
+#include <argp.h>
 #include "types.h"
 #include "airtrace.h"
 #include "airtrace.skel.h"
 #include "dot11_type.h"
+
+
+#define MAX_FILE_SIZE (50 * 1024 * 1024) // 50MB
+// #define MAX_FILE_SIZE (512) // 50MB
+
+static struct env {
+	unsigned char filter_mac[MAX_MAC_FILTER][6];
+	int mac_num;
+    char file[128];
+	int max_size;
+} env = {
+	.filter_mac = { { 0 } },
+	.mac_num = 0,
+	.file = "./airtrace.pcap",
+	.max_size = MAX_FILE_SIZE
+};
+
+
+const char *argp_program_version = "airtrace 0.1";
+const char *argp_program_bug_address =
+	"modified from https://github.com/iovisor/bcc/tree/master/libbpf-tools";
+
+const char argp_args_doc[] =
+"Trace outstanding memory allocations\n"
+"\n"
+"USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file]\n"
+"\n"
+"";
+
+static const struct argp_option argp_options[] = {
+	{"max-size", 'Z', "MAX_SIZE", 0, "maximum capture file size"},
+    {"output", 'o', "FILE", 0, "output file"},
+	{"mac", 'm', "MAC_ADDR", 0, "Specify one or more MAC addresses (comma-separated)"},
+	{ 0 }
+};
 
 struct pcap_global_hdr_s
 {
@@ -57,13 +95,23 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 
 	return vfprintf(stderr, format, args);
 }
+
+static time_t cached_boot_time;
+
+// 初始化时调用一次
+void init_time_converter() {
+    struct sysinfo info;
+    sysinfo(&info);
+    cached_boot_time = time(NULL) - info.uptime;
+}
+
 FILE *fp = NULL;
 void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 {
 	struct event_t *m = data;
 	struct pcap_mypkt pkt;
-	pkt.packet_hdr.timestamp_s = 0x5fa45360;
-    pkt.packet_hdr.timestamp_us = 0;
+	pkt.packet_hdr.timestamp_s = m->timestamp_ns / 1000000000 + cached_boot_time;
+    pkt.packet_hdr.timestamp_us = (m->timestamp_ns % 10000000000) / 1000;
     pkt.packet_hdr.capture_len = m->msglen + sizeof(pkt.radiotap_hdr);
     pkt.packet_hdr.original_len = m->msglen + sizeof(pkt.radiotap_hdr);
     pkt.radiotap_hdr.revision = 0;
@@ -77,6 +125,13 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
     pkt.radiotap_hdr.antenna_signal = -27;
     pkt.radiotap_hdr.antenna_noise = -89;
     pkt.radiotap_hdr.signal_quality = 0x0064;
+	static int file_size = 0;
+
+	if (file_size > env.max_size && fp != stdout)
+	{
+		printf("file size %d > %d\n", file_size, env.max_size);
+		return;
+	}
 	
 
 	header_802_11_t *hdr = (header_802_11_t *)m->message;
@@ -85,22 +140,31 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 		pkt.packet_hdr.capture_len += 2;
 		pkt.packet_hdr.original_len += 2;
 		fwrite(&pkt, sizeof(pkt), 1, fp);
+		file_size += sizeof(pkt);
 
 		u16 qos_control = 0;
 		fwrite(hdr, sizeof(header_802_11_t), 1, fp);
+		file_size += sizeof(header_802_11_t);
 
 		fwrite(&qos_control, sizeof(qos_control), 1, fp);
+		file_size += sizeof(qos_control);
 		fwrite(m->message + sizeof(header_802_11_t), m->msglen - sizeof(header_802_11_t), 1, fp);
+		file_size += m->msglen;
 		// u64 frame_check = 0;
 		// fwrite(&frame_check, sizeof(frame_check), 1, fp);
 	}
 	else
 	{
 		fwrite(&pkt, sizeof(pkt), 1, fp);
+		file_size += sizeof(pkt);
 		fwrite(m->message, m->msglen, 1, fp);
+		file_size += m->msglen;
 	}
 	fflush(fp);
-	printf("frame msglen %d\n", m->msglen);
+	if (fp != stdout)
+	{
+		printf("frame msglen %d\n", m->msglen);
+	}
 }
 
 void lost_event(void *ctx, int cpu, long long unsigned int data_sz)
@@ -154,12 +218,87 @@ extern LIBBPF_API int bpf_map_update_elem(int fd, const void *key, const void *v
 
 // }
 
+long argp_parse_long(int key, const char *arg, struct argp_state *state)
+{
+	errno = 0;
+	const long temp = strtol(arg, NULL, 10);
+	if (errno || temp <= 0) {
+		fprintf(stderr, "error arg:%c %s\n", (char)key, arg);
+		argp_usage(state);
+	}
+
+	return temp;
+}
+
+static void parse_mac_filter(struct env *env, char *arg)
+{
+	 char *token = strtok(arg, ",");
+	while (token) {
+		if (env->mac_num >= sizeof(env->filter_mac) / sizeof(env->filter_mac[0]))
+		{
+			return;
+		}
+
+		if (strlen(token) == 17 && strchr(token, ':')) {
+			sscanf(token, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
+               &env->filter_mac[env->mac_num][0], &env->filter_mac[env->mac_num][1], 
+			   &env->filter_mac[env->mac_num][2], &env->filter_mac[env->mac_num][3], 
+			   &env->filter_mac[env->mac_num][4], &env->filter_mac[env->mac_num][5]);
+			env->mac_num++;
+		} else {
+			fprintf(stderr, "Invalid MAC format: %s\n", token);
+			return;
+		}
+		token = strtok(NULL, ",");
+	}
+}
+
+error_t argp_parse_arg(int key, char *arg, struct argp_state *state)
+{
+	switch (key) {
+	case 'o':
+		// env.min_age_ns = 1e6 * atoi(arg);
+		snprintf(env.file, sizeof(env.file), "%s", arg);
+		break;
+	case 'Z':
+		env.max_size = atoi(arg);
+		break;
+	case 'm':
+		parse_mac_filter(&env, arg);
+		break;
+	default:
+		return ARGP_ERR_UNKNOWN;
+	}
+
+	return 0;
+}
+
+#include <sys/resource.h>
+
+int liberate_l()
+{
+	struct rlimit lim = {RLIM_INFINITY, RLIM_INFINITY};
+	return setrlimit(RLIMIT_MEMLOCK, &lim);
+}
+
 int main(int argc, char *argv[])
 {
     struct airtrace_bpf *skel;
 	// struct bpf_object_open_opts *o;
     int err;
 	struct perf_buffer *pb = NULL;
+
+	static const struct argp argp = {
+		.options = argp_options,
+		.parser = argp_parse_arg,
+		.doc = argp_args_doc,
+	};
+
+    // parse command line args to env settings
+	if (argp_parse(&argp, argc, argv, 0, NULL, NULL)) {
+		perror("failed to parse args");
+        exit(EXIT_FAILURE);
+	}
 
 	struct sigaction sa;
     sa.sa_handler = sigint_handler;
@@ -172,15 +311,19 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
+	init_time_converter();
+
 
 	libbpf_set_print(libbpf_print_fn);
 
-	char log_buf[64 * 1024];
+	char log_buf[512 * 1024];
 	LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.kernel_log_buf = log_buf,
 		.kernel_log_size = sizeof(log_buf),
 		.kernel_log_level = 1,
 	);
+
+	liberate_l();
 
 	skel = airtrace_bpf__open_opts(&opts);
 	if (!skel) {
@@ -190,11 +333,14 @@ int main(int argc, char *argv[])
 
 	err = airtrace_bpf__load(skel);
 	// Print the verifier log
-	for (int i=0; i < sizeof(log_buf); i++) {
-		if (log_buf[i] == 0 && log_buf[i+1] == 0) {
-			break;
+	if (0 != strcmp(env.file, "-"))
+	{
+		for (int i=0; i < sizeof(log_buf); i++) {
+			if (log_buf[i] == 0 && log_buf[i+1] == 0) {
+				break;
+			}
+			printf("%c", log_buf[i]);
 		}
-		printf("%c", log_buf[i]);
 	}
 	
 	if (err) {
@@ -207,14 +353,8 @@ int main(int argc, char *argv[])
 	bpf_args_t bpf_args;
 	// unsigned char filter_mac[6] = {0xd4, 0xd7, 0xcf, 0xd1, 0x7c, 0xa9};
 	memset(&bpf_args, 0, sizeof(bpf_args));
-
-	if (argc >= 3 && 0 == strcmp(argv[1], "--addr"))
-	{
-		sscanf(argv[2], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
-			&bpf_args.pkt.addr[0], &bpf_args.pkt.addr[1], &bpf_args.pkt.addr[2], 
-			&bpf_args.pkt.addr[3], &bpf_args.pkt.addr[4], &bpf_args.pkt.addr[5]);
-	}
-	
+	memcpy(bpf_args.pkt.addr, env.filter_mac, sizeof(bpf_args.pkt.addr));
+	bpf_args.pkt.mac_num = env.mac_num;
 
 	bpf_set_config(skel, bss, bpf_args);
 
@@ -235,12 +375,14 @@ int main(int argc, char *argv[])
 	}
 
 	// 写入文件
-    fp = fopen("test.pcap", "wb");
-    if (!fp)
-    {
-        perror("Failed to open file");
-        return 1;
-    }
+    if (0 == strcmp(env.file, "-"))
+	{
+		fp = stdout;
+	}
+	else
+	{
+    	fp = fopen(env.file, "wb");
+	}
 
 	struct pcap_global_hdr_s global_hdr;
 	global_hdr.magic = 0xa1b2c3d4;
@@ -252,8 +394,10 @@ int main(int argc, char *argv[])
     global_hdr.linktype = 0x7f; // 802.11 pkt
     fwrite(&global_hdr, sizeof(global_hdr), 1, fp);
 
-
-	printf("begin capture...\n");
+	if (fp != stdout)
+	{
+		printf("begin capture...\n");
+	}
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
 		// Ctrl-C gives -EINTR
@@ -270,7 +414,11 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	printf("end capture...\n");
+
+	if (fp != stdout)
+	{
+		printf("end capture...\n");
+	}
 
     fclose(fp);
 
