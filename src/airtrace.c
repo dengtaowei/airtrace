@@ -23,11 +23,14 @@ static struct env {
     char file[128];
 	char script[128];
 	int max_size;
+	int debug_level;
 } env = {
 	.filter_mac = { { 0 } },
 	.mac_num = 0,
 	.file = "./airtrace.pcap",
-	.max_size = MAX_FILE_SIZE
+	.script = { 0 },
+	.max_size = MAX_FILE_SIZE,
+	.debug_level = 0
 };
 
 
@@ -38,7 +41,7 @@ const char *argp_program_bug_address =
 const char argp_args_doc[] =
 "Trace mtk wifi driver\n"
 "\n"
-"USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file] [-s SCRIPT]\n"
+"USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file] [-s SCRIPT] [-d]\n"
 "\n"
 "";
 
@@ -47,6 +50,7 @@ static const struct argp_option argp_options[] = {
     {"output", 'o', "FILE", 0, "output file"},
 	{"mac", 'm', "MAC_ADDR", 0, "Specify one or more MAC addresses (comma-separated)"},
 	{"script", 's', "SCRIPT", 0, "run script when assoc req"},
+	{"debug", 'd', NULL, 0, "set debug level"},
 	{ 0 }
 };
 
@@ -92,7 +96,7 @@ struct pcap_mypkt
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
-	if (level >= LIBBPF_DEBUG)
+	if (level >= env.debug_level)
 		return 0;
 
 	return vfprintf(stderr, format, args);
@@ -281,6 +285,9 @@ error_t argp_parse_arg(int key, char *arg, struct argp_state *state)
 	case 's':
 		snprintf(env.script, sizeof(env.script), "%s", arg);
 		break;
+	case 'd':
+		env.debug_level++;
+		break;
 	default:
 		return ARGP_ERR_UNKNOWN;
 	}
@@ -335,7 +342,7 @@ int main(int argc, char *argv[])
 	LIBBPF_OPTS(bpf_object_open_opts, opts,
 		.kernel_log_buf = log_buf,
 		.kernel_log_size = sizeof(log_buf),
-		.kernel_log_level = 1,
+		.kernel_log_level = env.debug_level ? 1:0,
 	);
 
 	liberate_l();
