@@ -33,10 +33,10 @@ static struct env {
 
 const char *argp_program_version = "airtrace 0.1";
 const char *argp_program_bug_address =
-	"modified from https://github.com/iovisor/bcc/tree/master/libbpf-tools";
+	"dtwdebug";
 
 const char argp_args_doc[] =
-"Trace outstanding memory allocations\n"
+"Trace mtk wifi driver\n"
 "\n"
 "USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file] [-s SCRIPT]\n"
 "\n"
