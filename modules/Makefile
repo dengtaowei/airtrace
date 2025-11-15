@@ -8,6 +8,7 @@ export ARCH = arm
 export CROSS_COMPILE = arm-linux-gnueabi-
 
 # CC = arm-linux-gnueabi-gcc
+export EXTRA_CFLAGS += -fno-inline
 
 all:
 	make -C $(KDIR) M=$(PWD) modules
