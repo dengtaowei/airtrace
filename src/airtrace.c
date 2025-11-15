@@ -21,6 +21,7 @@ static struct env {
 	unsigned char filter_mac[MAX_MAC_FILTER][6];
 	int mac_num;
     char file[128];
+	char script[128];
 	int max_size;
 } env = {
 	.filter_mac = { { 0 } },
@@ -37,7 +38,7 @@ const char *argp_program_bug_address =
 const char argp_args_doc[] =
 "Trace outstanding memory allocations\n"
 "\n"
-"USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file]\n"
+"USAGE: airtrace [-h] [-Z MAX_SIZE] [-o output file] [-s SCRIPT]\n"
 "\n"
 "";
 
@@ -45,6 +46,7 @@ static const struct argp_option argp_options[] = {
 	{"max-size", 'Z', "MAX_SIZE", 0, "maximum capture file size"},
     {"output", 'o', "FILE", 0, "output file"},
 	{"mac", 'm', "MAC_ADDR", 0, "Specify one or more MAC addresses (comma-separated)"},
+	{"script", 's', "SCRIPT", 0, "run script when assoc req"},
 	{ 0 }
 };
 
@@ -135,6 +137,16 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 	
 
 	header_802_11_t *hdr = (header_802_11_t *)m->message;
+
+	if (env.script[0] != '\0' && hdr->FC.Type == FC_TYPE_MGMT && hdr->FC.SubType == SUBTYPE_ASSOC_REQ)
+	{
+		char sta_mac[32] = { 0 };
+		snprintf(sta_mac, sizeof(sta_mac), "%02x:%02x:%02x:%02x:%02x:%02x", hdr->Src[0], 
+			hdr->Src[1], hdr->Src[2], hdr->Src[3], hdr->Src[4], hdr->Src[5]);
+		setenv("STA_MAC", sta_mac, 1);      // 设置环境变量
+		setenv("FRAME_TYPE", "ASSOC_REQ", 1);
+		system(env.script);
+	}
 	if (hdr->FC.Type == FC_TYPE_DATA)
 	{
 		pkt.packet_hdr.capture_len += 2;
@@ -265,6 +277,9 @@ error_t argp_parse_arg(int key, char *arg, struct argp_state *state)
 		break;
 	case 'm':
 		parse_mac_filter(&env, arg);
+		break;
+	case 's':
+		snprintf(env.script, sizeof(env.script), "%s", arg);
 		break;
 	default:
 		return ARGP_ERR_UNKNOWN;

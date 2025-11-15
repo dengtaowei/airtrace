@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/src/airtrace",
-            "args": ["-m", "08:3b:e9:14:94:f7"],
+            "args": ["-m", "08:3b:e9:14:94:f7", "-s", "/home/anlan/Desktop/airtrace/src/script.sh"],
             "stopAtEntry": true,
             "cwd": "${fileDirname}",
             "environment": [],
