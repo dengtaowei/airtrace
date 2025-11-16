@@ -135,7 +135,7 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 
 	if (file_size > env.max_size && fp != stdout)
 	{
-		printf("file size %d > %d\n", file_size, env.max_size);
+		fprintf(stderr, "file size %d > %d\n", file_size, env.max_size);
 		return;
 	}
 	
@@ -177,15 +177,12 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 		file_size += m->msglen;
 	}
 	fflush(fp);
-	if (fp != stdout)
-	{
-		printf("frame msglen %d\n", m->msglen);
-	}
+	fprintf(stderr, "frame msglen %d\n", m->msglen);
 }
 
 void lost_event(void *ctx, int cpu, long long unsigned int data_sz)
 {
-	printf("lost event\n");
+	fprintf(stderr, "lost event\n");
 }
 
 #include <stdatomic.h>
@@ -206,7 +203,7 @@ extern LIBBPF_API int bpf_map_update_elem(int fd, const void *key, const void *v
 	int key = 0;					\
 							\
 	if (fd < 0) {					\
-		printf("failed to get config map: %d\n",\
+		fprintf(stderr, "failed to get config map: %d\n",\
 		       fd);				\
 		break;					\
 	}						\
@@ -224,7 +221,7 @@ extern LIBBPF_API int bpf_map_update_elem(int fd, const void *key, const void *v
 // 	int key = 0;					
 							
 // 	if (fd < 0) {					
-// 		printf("failed to get config map: %d\n",
+// 		fprintf(stderr, "failed to get config map: %d\n",
 // 		       fd);							
 // 	}						
 							
@@ -349,7 +346,7 @@ int main(int argc, char *argv[])
 
 	skel = airtrace_bpf__open_opts(&opts);
 	if (!skel) {
-		printf("Failed to open BPF object\n");
+		fprintf(stderr, "Failed to open BPF object\n");
 		return 1;
 	}
 
@@ -361,12 +358,12 @@ int main(int argc, char *argv[])
 			if (log_buf[i] == 0 && log_buf[i+1] == 0) {
 				break;
 			}
-			printf("%c", log_buf[i]);
+			fprintf(stderr, "%c", log_buf[i]);
 		}
 	}
 	
 	if (err) {
-		printf("Failed to load BPF object\n");
+		fprintf(stderr, "Failed to load BPF object\n");
 		airtrace_bpf__destroy(skel);
 		return 1;
 	}
@@ -418,7 +415,7 @@ int main(int argc, char *argv[])
 
 	if (fp != stdout)
 	{
-		printf("begin capture...\n");
+		fprintf(stderr, "begin capture...\n");
 	}
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
@@ -428,7 +425,7 @@ int main(int argc, char *argv[])
 		// 	break;
 		// }
 		// if (err < 0) {
-		// 	printf("Error polling perf buffer: %d\n", err);
+		// 	fprintf(stderr, "Error polling perf buffer: %d\n", err);
 		// 	break;
 		// }
 		if (g_exit_flag)
@@ -439,7 +436,7 @@ int main(int argc, char *argv[])
 
 	if (fp != stdout)
 	{
-		printf("end capture...\n");
+		fprintf(stderr, "end capture...\n");
 	}
 
     fclose(fp);
