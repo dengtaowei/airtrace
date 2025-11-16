@@ -133,7 +133,7 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
     pkt.radiotap_hdr.signal_quality = 0x0064;
 	static int file_size = 0;
 
-	if (file_size > env.max_size && fp != stdout)
+	if (file_size > env.max_size)
 	{
 		fprintf(stderr, "file size %d > %d\n", file_size, env.max_size);
 		return;
@@ -177,7 +177,7 @@ void handle_event(void *ctx, int cpu, void *data, unsigned int data_sz)
 		file_size += m->msglen;
 	}
 	fflush(fp);
-	fprintf(stderr, "frame msglen %d\n", m->msglen);
+	fprintf(stderr, "frame msglen %4d\n", m->msglen);
 }
 
 void lost_event(void *ctx, int cpu, long long unsigned int data_sz)
@@ -413,10 +413,8 @@ int main(int argc, char *argv[])
     global_hdr.linktype = 0x7f; // 802.11 pkt
     fwrite(&global_hdr, sizeof(global_hdr), 1, fp);
 
-	if (fp != stdout)
-	{
-		fprintf(stderr, "begin capture...\n");
-	}
+	fprintf(stderr, "begin capture...\n");
+
 	while (true) {
 		err = perf_buffer__poll(pb, 100 /* timeout, ms */);
 		// Ctrl-C gives -EINTR
@@ -434,10 +432,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (fp != stdout)
-	{
-		fprintf(stderr, "end capture...\n");
-	}
+	fprintf(stderr, "end capture...\n");
 
     fclose(fp);
 
