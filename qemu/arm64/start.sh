@@ -13,7 +13,7 @@ sudo umount fs
 
 qemu-system-aarch64 -machine virt,virtualization=true,gic-version=3 \
     -nographic -m size=1024M -cpu cortex-a57 -smp 4 \
-    -kernel arch/arm64/boot/Image -hda rootfs.img -append "root=/dev/vda"
+    -kernel Image -hda rootfs.img -append "root=/dev/vda"
 
 
 
