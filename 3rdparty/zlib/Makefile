@@ -43,7 +43,7 @@ TAR=tar
 SHELL=/bin/sh
 EXE=
 
-prefix =../install/arm
+prefix =../install/$(ARCH)
 exec_prefix =${prefix}
 libdir =${exec_prefix}/lib
 sharedlibdir =${libdir}
