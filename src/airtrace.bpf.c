@@ -466,9 +466,9 @@ int __trace_send_data_pkt(struct pt_regs *ctx)
     unsigned int len;
     static struct event_t event;
 
-    bpf_probe_read_kernel(&len, sizeof(len), skb + SKB_LEN_OFFSET);
+    bpf_probe_read(&len, sizeof(len), skb + SKB_LEN_OFFSET);
 
-	bpf_probe_read_kernel(&data, sizeof(data), skb + SKB_DATA_OFFSET);
+	bpf_probe_read(&data, sizeof(data), skb + SKB_DATA_OFFSET);
 
 	if (len < sizeof(struct ethhdr))
 	{
@@ -476,7 +476,7 @@ int __trace_send_data_pkt(struct pt_regs *ctx)
 	}
 
     struct ethhdr eth_header;
-	bpf_probe_read_kernel(&eth_header, sizeof(eth_header), data);
+	bpf_probe_read(&eth_header, sizeof(eth_header), data);
     if (eth_header.h_proto != 0x8e88)
     {
         return 0;
@@ -494,16 +494,16 @@ int __trace_send_data_pkt(struct pt_regs *ctx)
 
     if (len < sizeof(event.message) - 24 - 8 + 14 && len - 14 > 0)
     {
-        bpf_probe_read_kernel(event.message + 24 + 8 - 14, len, data);
+        bpf_probe_read(event.message + 24 + 8 - 14, len, data);
         event.msglen += (len - 14);
     }
 
     hdr->FC.Type = FC_TYPE_DATA;
     hdr->FC.SubType = SUBTYPE_QDATA;
     hdr->FC.FrDs = 1;
-    bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-    bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-    bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+    bpf_probe_read(hdr->Dst, 6, eth_header.h_dest);
+    bpf_probe_read(hdr->Src, 6, eth_header.h_source);
+    bpf_probe_read(hdr->Bssid, 6, eth_header.h_source);
     event.msglen += sizeof(header_802_11_t);
 
     // data.message[data.msglen] = 0;  // add qos control userspace
@@ -548,13 +548,13 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
     unsigned int len;
     static struct event_t event;
 
-    bpf_probe_read_kernel(&mac_header, sizeof(mac_header), skb + SKB_MAC_HEADER_OFFSET);
-    bpf_probe_read_kernel(&network_header, sizeof(network_header), skb + SKB_NETWORK_HEADER_OFFSET);
-    bpf_probe_read_kernel(&head, sizeof(head), skb + SKB_HEAD_OFFSET);
+    bpf_probe_read(&mac_header, sizeof(mac_header), skb + SKB_MAC_HEADER_OFFSET);
+    bpf_probe_read(&network_header, sizeof(network_header), skb + SKB_NETWORK_HEADER_OFFSET);
+    bpf_probe_read(&head, sizeof(head), skb + SKB_HEAD_OFFSET);
 
-    bpf_probe_read_kernel(&len, sizeof(len), skb + SKB_LEN_OFFSET);
+    bpf_probe_read(&len, sizeof(len), skb + SKB_LEN_OFFSET);
 
-	bpf_probe_read_kernel(&data, sizeof(data), skb + SKB_DATA_OFFSET);
+	bpf_probe_read(&data, sizeof(data), skb + SKB_DATA_OFFSET);
 
 	if (len < sizeof(struct ethhdr))
 	{
@@ -562,7 +562,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
 	}
 
     struct ethhdr eth_header;
-	bpf_probe_read_kernel(&eth_header, sizeof(eth_header), head + mac_header);
+	bpf_probe_read(&eth_header, sizeof(eth_header), head + mac_header);
 
     if (eth_header.h_proto != 0x0008 && eth_header.h_proto != 0xdd86)  // ipv4 or ipv6
     {
@@ -580,7 +580,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
     if (eth_header.h_proto == 0x0008)
     {
         struct iphdr ip_header;
-        bpf_probe_read_kernel(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
+        bpf_probe_read(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
         // bpf_printk("ipv4 ver %d, len %d, protocol %d", ip_header.version, ip_header.ihl, ip_header.protocol);
 
         if (ip_header.ihl != 5 || ip_header.protocol != 17)  // not udp
@@ -589,7 +589,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
         }
 
         struct udphdr udp_header;
-        bpf_probe_read_kernel(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
+        bpf_probe_read(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
         // bpf_printk("udp src port %d, dst port %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), udp_header.len);
         if (bpf_ntohs(udp_header.source) != 68 || bpf_ntohs(udp_header.dest) != 67)
         {
@@ -605,7 +605,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
 
         if (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14 > 0)
         {
-            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
+            bpf_probe_read(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
             event.msglen += (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14);
         }
 
@@ -613,9 +613,9 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
         hdr->FC.Type = FC_TYPE_DATA;
         hdr->FC.SubType = SUBTYPE_QDATA;
         hdr->FC.FrDs = 1;
-        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Bssid, 6, eth_header.h_source);
         event.msglen += sizeof(header_802_11_t);
 
         event.message[sizeof(header_802_11_t) + 0] = 0xaa;
@@ -641,7 +641,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
     else if (eth_header.h_proto == 0xdd86)
     {
         struct ipv6hdr ipv6_header;
-        bpf_probe_read_kernel(&ipv6_header, sizeof(ipv6_header), head + mac_header + sizeof(struct ethhdr));
+        bpf_probe_read(&ipv6_header, sizeof(ipv6_header), head + mac_header + sizeof(struct ethhdr));
 
         if (ipv6_header.nexthdr != 0x3a)  // not icmpv6
         {
@@ -649,7 +649,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
         }
 
         struct icmp6hdr icmp6_header;
-        bpf_probe_read_kernel(&icmp6_header, sizeof(icmp6_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct ipv6hdr));
+        bpf_probe_read(&icmp6_header, sizeof(icmp6_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct ipv6hdr));
         if (icmp6_header.icmp6_type != 133 && icmp6_header.icmp6_type != 134)
         {
             return 0;
@@ -662,7 +662,7 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
 
         if (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14 > 0)
         {
-            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len, head + mac_header);
+            bpf_probe_read(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len, head + mac_header);
             event.msglen += (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14);
         }
 
@@ -670,9 +670,9 @@ int __trace_RtmpOsPktRcvHandle(struct pt_regs *ctx)
         hdr->FC.Type = FC_TYPE_DATA;
         hdr->FC.SubType = SUBTYPE_QDATA;
         hdr->FC.FrDs = 1;
-        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Bssid, 6, eth_header.h_source);
         event.msglen += sizeof(header_802_11_t);
 
         event.message[sizeof(header_802_11_t) + 0] = 0xaa;
@@ -713,13 +713,13 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
     unsigned int len;
     static struct event_t event;
 
-    bpf_probe_read_kernel(&mac_header, sizeof(mac_header), skb + SKB_MAC_HEADER_OFFSET);
-    bpf_probe_read_kernel(&network_header, sizeof(network_header), skb + SKB_NETWORK_HEADER_OFFSET);
-    bpf_probe_read_kernel(&head, sizeof(head), skb + SKB_HEAD_OFFSET);
+    bpf_probe_read(&mac_header, sizeof(mac_header), skb + SKB_MAC_HEADER_OFFSET);
+    bpf_probe_read(&network_header, sizeof(network_header), skb + SKB_NETWORK_HEADER_OFFSET);
+    bpf_probe_read(&head, sizeof(head), skb + SKB_HEAD_OFFSET);
 
-    bpf_probe_read_kernel(&len, sizeof(len), skb + SKB_LEN_OFFSET);
+    bpf_probe_read(&len, sizeof(len), skb + SKB_LEN_OFFSET);
 
-	bpf_probe_read_kernel(&data, sizeof(data), skb + SKB_DATA_OFFSET);
+	bpf_probe_read(&data, sizeof(data), skb + SKB_DATA_OFFSET);
 
 	if (len < sizeof(struct ethhdr))
 	{
@@ -727,7 +727,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
 	}
 
     struct ethhdr eth_header;
-	bpf_probe_read_kernel(&eth_header, sizeof(eth_header), head + mac_header);
+	bpf_probe_read(&eth_header, sizeof(eth_header), head + mac_header);
 
     if (eth_header.h_proto != 0x0008 && eth_header.h_proto != 0xdd86)  // ipv4 or ipv6
     {
@@ -746,7 +746,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
     if (eth_header.h_proto == 0x0008)
     {
         struct iphdr ip_header;
-        bpf_probe_read_kernel(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
+        bpf_probe_read(&ip_header, sizeof(ip_header), head + mac_header + sizeof(struct ethhdr));
         // bpf_printk("ipv4 ver %d, len %d, protocol %d", ip_header.version, ip_header.ihl, ip_header.protocol);
 
         if (ip_header.ihl != 5 || ip_header.protocol != 17)  // not udp
@@ -755,7 +755,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
         }
 
         struct udphdr udp_header;
-        bpf_probe_read_kernel(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
+        bpf_probe_read(&udp_header, sizeof(udp_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct iphdr));
         // bpf_printk("udp src port %d, dst port %d, len %d", bpf_ntohs(udp_header.source), bpf_ntohs(udp_header.dest), udp_header.len);
         if (bpf_ntohs(udp_header.source) != 67 || bpf_ntohs(udp_header.dest) != 68)
         {
@@ -771,7 +771,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
 
         if (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14 > 0)
         {
-            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
+            bpf_probe_read(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len, head + mac_header);
             event.msglen += (sizeof(struct ethhdr) + sizeof(struct iphdr) + udp_len - 14);
         }
 
@@ -779,9 +779,9 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
         hdr->FC.Type = FC_TYPE_DATA;
         hdr->FC.SubType = SUBTYPE_QDATA;
         hdr->FC.FrDs = 1;
-        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Bssid, 6, eth_header.h_source);
         event.msglen += sizeof(header_802_11_t);
 
         event.message[sizeof(header_802_11_t) + 0] = 0xaa;
@@ -807,7 +807,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
     else if (eth_header.h_proto == 0xdd86)
     {
         struct ipv6hdr ipv6_header;
-        bpf_probe_read_kernel(&ipv6_header, sizeof(ipv6_header), head + mac_header + sizeof(struct ethhdr));
+        bpf_probe_read(&ipv6_header, sizeof(ipv6_header), head + mac_header + sizeof(struct ethhdr));
 
         if (ipv6_header.nexthdr != 0x3a)  // not icmpv6
         {
@@ -815,7 +815,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
         }
 
         struct icmp6hdr icmp6_header;
-        bpf_probe_read_kernel(&icmp6_header, sizeof(icmp6_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct ipv6hdr));
+        bpf_probe_read(&icmp6_header, sizeof(icmp6_header), head + mac_header + sizeof(struct ethhdr) + sizeof(struct ipv6hdr));
         if (icmp6_header.icmp6_type != 133 && icmp6_header.icmp6_type != 134)
         {
             return 0;
@@ -828,7 +828,7 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
 
         if (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len < sizeof(event.message) - 24 - 8 + 14 && sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14 > 0)
         {
-            bpf_probe_read_kernel(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len, head + mac_header);
+            bpf_probe_read(event.message + 24 + 8 - 14, sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len, head + mac_header);
             event.msglen += (sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + icmp6_len - 14);
         }
 
@@ -836,9 +836,9 @@ int __trace_rt28xx_send_packets(struct pt_regs *ctx)
         hdr->FC.Type = FC_TYPE_DATA;
         hdr->FC.SubType = SUBTYPE_QDATA;
         hdr->FC.FrDs = 1;
-        bpf_probe_read_kernel(hdr->Dst, 6, eth_header.h_dest);
-        bpf_probe_read_kernel(hdr->Src, 6, eth_header.h_source);
-        bpf_probe_read_kernel(hdr->Bssid, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Dst, 6, eth_header.h_dest);
+        bpf_probe_read(hdr->Src, 6, eth_header.h_source);
+        bpf_probe_read(hdr->Bssid, 6, eth_header.h_source);
         event.msglen += sizeof(header_802_11_t);
 
         event.message[sizeof(header_802_11_t) + 0] = 0xaa;
