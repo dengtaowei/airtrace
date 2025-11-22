@@ -1,0 +1,83 @@
+# STRUCT_BEGIN struct tcp_sock 1728
+FIELD: retrans_out offset=1256 size=4
+FIELD: rcv_nxt offset=1008 size=4
+FIELD: snd_una offset=1052 size=4
+FIELD: packets_out offset=1252 size=4
+# STRUCT_END struct tcp_sock
+
+# STRUCT_BEGIN struct timer_list 20
+FIELD: expires offset=8 size=4
+# STRUCT_END struct timer_list
+
+# STRUCT_BEGIN struct inet_connection_sock 984
+FIELD: icsk_timeout offset=740 size=4
+FIELD: icsk_retransmit_timer offset=744 size=20 type=timer_list
+FIELD: icsk_retransmits offset=825 size=1
+FIELD: icsk_pending offset=826 size=1
+# STRUCT_END struct inet_connection_sock
+
+# STRUCT_BEGIN struct sock_common 80
+FIELD: skc_daddr offset=0 size=4
+FIELD: skc_rcv_saddr offset=4 size=4
+FIELD: skc_dport offset=12 size=2
+FIELD: skc_num offset=14 size=2
+FIELD: skc_family offset=16 size=2
+FIELD: skc_state offset=18 size=1
+# STRUCT_END struct sock_common
+
+# STRUCT_BEGIN struct tcp_skb_cb 48
+FIELD: seq offset=0 size=4
+FIELD: tcp_flags offset=12 size=1
+# STRUCT_END struct tcp_skb_cb
+
+# STRUCT_BEGIN struct __sk_buff 192
+FIELD: data offset=76 size=4
+FIELD: data_end offset=80 size=4
+# STRUCT_END struct __sk_buff
+
+# STRUCT_BEGIN struct netdev_queue 256
+FIELD: trans_start offset=72 size=4
+FIELD: state offset=76 size=4
+# STRUCT_END struct netdev_queue
+
+# STRUCT_BEGIN struct net_device 1408
+FIELD: ifindex offset=128 size=4
+FIELD: name offset=0 size=16
+# STRUCT_END struct net_device
+
+# STRUCT_BEGIN struct qdisc_skb_head 16
+FIELD: qlen offset=8 size=4
+# STRUCT_END struct qdisc_skb_head
+
+# STRUCT_BEGIN struct Qdisc 256
+FIELD: flags offset=8 size=4
+FIELD: dev_queue offset=40 size=4
+FIELD: q offset=80 size=16 type=qdisc_skb_head
+# STRUCT_END struct Qdisc
+
+# STRUCT_BEGIN struct sk_buff 176
+FIELD: dev offset=8 size=4
+FIELD: sk offset=12 size=4
+FIELD: cb offset=24 size=48
+FIELD: skb_iif offset=112 size=4
+FIELD: protocol offset=140 size=2
+FIELD: transport_header offset=142 size=2
+FIELD: network_header offset=144 size=2
+FIELD: mac_header offset=146 size=2
+FIELD: head offset=156 size=4
+# STRUCT_END struct sk_buff
+
+# STRUCT_BEGIN struct sk_buff_head 16
+FIELD: qlen offset=8 size=4
+# STRUCT_END struct sk_buff_head
+
+# STRUCT_BEGIN struct socket 128
+FIELD: sk offset=16 size=4
+# STRUCT_END struct socket
+
+# STRUCT_BEGIN struct sock 496
+FIELD: __sk_common offset=0 size=80 type=sock_common
+FIELD: sk_receive_queue offset=136 size=16 type=sk_buff_head
+FIELD: sk_write_queue offset=228 size=16 type=sk_buff_head
+FIELD: sk_protocol offset=340 size=2
+# STRUCT_END struct sock
